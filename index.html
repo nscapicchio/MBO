@@ -506,6 +506,17 @@ tbody tr:hover td { background: var(--bg2); }
   </div>
 </div>
 
+<!-- RAT WARNING BANNER -->
+<div id="ratWarning" style="display:none;align-items:center;gap:14px;padding:10px 40px;background:rgba(232,184,110,0.07);border-bottom:1px solid rgba(232,184,110,0.2);">
+  <span style="font-size:0.8rem;color:var(--amber)">⚠ <strong>RAT non trovata nel file:</strong> i premi non sono calcolabili. Carica il file anagrafica (nome, RAT) per abilitare il calcolo.</span>
+  <label style="cursor:pointer;position:relative;flex-shrink:0">
+    <input type="file" accept=".csv,.txt" onchange="handleRatFile(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+    <span class="btn-sm primary" style="font-size:0.7rem;padding:4px 12px;pointer-events:none">↑ Carica Anagrafica RAT</span>
+  </label>
+  <span id="ratImportMsg" style="font-size:0.72rem;color:var(--green)"></span>
+  <button onclick="document.getElementById('ratWarning').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem">✕</button>
+</div>
+
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-tab active" onclick="showTab('panoramica',this)">Panoramica</div>
@@ -1146,58 +1157,173 @@ function importCSVText() {
   if(result) toggleImport();
 }
 
-// Core CSV → DATA parser (shared by both import modes)
+// ── CSV line parser (handles quoted fields) ──────────────────
+function parseCSVLine(line) {
+  const res=[]; let cur='', inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){ inQ=!inQ; }
+    else if(ch===','&&!inQ){ res.push(cur); cur=''; }
+    else cur+=ch;
+  }
+  res.push(cur); return res;
+}
+
+// ── Normalizza stringhe: rimuove "•", spazi, virgolette ──────
+const clean = v => String(v||'').replace(/^[\s•·\-–"]+/,'').replace(/["]/g,'').replace(/\s+/g,' ').trim();
+const rating = v => { const m=String(v).match(/[1-5]/); return m?+m[0]:0; };
+
+// ── Core CSV → DATA parser ────────────────────────────────────
+// Supporta sia il formato Tally raw che il CSV semplice del RACCOGLITORE
 function parseCSVText(txt, errEl) {
   try {
-    // Handle quoted CSV fields
-    function parseCSVLine(line) {
-      const res=[]; let cur='', inQ=false;
-      for(let i=0;i<line.length;i++){
-        const ch=line[i];
-        if(ch==='"'){ inQ=!inQ; }
-        else if(ch===','&&!inQ){ res.push(cur); cur=''; }
-        else cur+=ch;
+    const lines = txt.split('\n').filter(l=>l.trim());
+    if (lines.length < 2) { errEl.textContent='File troppo corto.'; return null; }
+
+    const hdrs = parseCSVLine(lines[0]).map(h=>clean(h).toLowerCase());
+
+    // ── 1. Costruisci mappa nome→ruolo dagli header "Valutatore_X - Ruolo" (formato Tally)
+    const nameRoleMap = {};
+    hdrs.forEach(h => {
+      if (h.startsWith('valutatore_')) {
+        const dashIdx = h.indexOf(' - ');
+        if (dashIdx > 0) {
+          const rawName = h.slice('valutatore_'.length, dashIdx).replace(/_/g,' ').trim().toUpperCase();
+          const rawRole = h.slice(dashIdx + 3).trim();
+          // Capitalizza ogni parola del ruolo
+          const role = rawRole.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+          nameRoleMap[rawName] = role;
+        }
       }
-      res.push(cur); return res;
-    }
-    const lines=txt.split('\n').filter(l=>l.trim());
-    const hdrs=parseCSVLine(lines[0]).map(h=>h.replace(/"/g,'').trim().toLowerCase());
-    const fi=(...t)=>{ for(const tt of t){ const i=hdrs.findIndex(h=>h.includes(tt)); if(i>=0)return i; } return -1; };
-    const c={
-      resp:fi('responsabile'),
-      dip: fi('dipendente','valutato','nome'),
-      rat: fi('rat','retribuzione','ral'),
-      job: fi('ruolo','mansione','qualifica','job'),
-      a1:fi('a1'),a2:fi('a2'),a3:fi('a3'),
-      b1:fi('b1'),b2:fi('b2'),b3:fi('b3'),
-      c1:fi('c1'),c2:fi('c2'),c3:fi('c3')
+    });
+
+    // ── 2. Individua gli indici delle colonne chiave ──────────
+    const fi = (...terms) => { for(const t of terms){ const i=hdrs.findIndex(h=>h.includes(t)); if(i>=0)return i; } return -1; };
+
+    // Dipendente: cerca "dipendente valutato" esatto, poi "dipendente"
+    const dipIdx = (() => {
+      const exact = hdrs.findIndex(h => h === 'dipendente valutato');
+      if (exact >= 0) return exact;
+      return hdrs.findIndex(h => h.includes('dipendente'));
+    })();
+
+    // Responsabile: cerca "nome responsabile" esatto, poi "responsabile"
+    const respIdx = (() => {
+      const exact = hdrs.findIndex(h => h === 'nome responsabile');
+      if (exact >= 0) return exact;
+      return hdrs.findIndex(h => h.includes('responsabile') && !h.includes('valutatore'));
+    })();
+
+    const c = {
+      resp: respIdx,
+      dip:  dipIdx,
+      rat:  fi('rat','retribuzione','ral'),
+      job:  fi('ruolo','mansione','qualifica','job title'),
+      a1: fi('a1.'), a2: fi('a2.'), a3: fi('a3.'),
+      b1: fi('b1.'), b2: fi('b2.'), b3: fi('b3.'),
+      c1: fi('c1.'), c2: fi('c2.'), c3: fi('c3.')
     };
-    const clean=v=>String(v||'').replace(/^[\s•·\-–]+/,'').replace(/"/g,'').replace(/\s+/g,' ').trim();
-    const rating=v=>{ const m=String(v).match(/[1-5]/); return m?+m[0]:0; };
-    const nd=[];
-    for(let i=1;i<lines.length;i++){
-      const r=parseCSVLine(lines[i]);
-      if(r.length<5) continue;
-      const dip=c.dip>=0?clean(r[c.dip]):''; if(!dip) continue;
+
+    // Fallback se i criteri hanno header senza punto (es. "a1" da CSV semplice)
+    if(c.a1<0) c.a1=fi('a1'); if(c.a2<0) c.a2=fi('a2'); if(c.a3<0) c.a3=fi('a3');
+    if(c.b1<0) c.b1=fi('b1'); if(c.b2<0) c.b2=fi('b2'); if(c.b3<0) c.b3=fi('b3');
+    if(c.c1<0) c.c1=fi('c1'); if(c.c2<0) c.c2=fi('c2'); if(c.c3<0) c.c3=fi('c3');
+
+    const ratMissing = c.rat < 0;
+    const jobMissing = c.job < 0;
+
+    // ── 3. Parse righe dati ───────────────────────────────────
+    const nd = [];
+    for (let i = 1; i < lines.length; i++) {
+      const r = parseCSVLine(lines[i]);
+      if (r.length < 5) continue;
+      const dip = c.dip >= 0 ? clean(r[c.dip]) : '';
+      if (!dip) continue;
+
+      // Ruolo: dalla colonna o dagli header Valutatore_X (matching per cognome)
+      let job = jobMissing ? 'N/D' : clean(r[c.job]);
+      if ((job === 'N/D' || !job) && Object.keys(nameRoleMap).length) {
+        const dipUpper = dip.toUpperCase();
+        const dipSurname = dipUpper.split(' ')[0];
+        const match = Object.entries(nameRoleMap).find(([name]) =>
+          name.split(' ')[0] === dipSurname && dipSurname.length > 1
+        );
+        if (match) job = match[1];
+      }
+
+      // RAT: dalla colonna oppure dalla RAT_MAP (se l'utente l'ha caricata)
+      let rat = 0;
+      if (c.rat >= 0) {
+        rat = parseFloat(String(r[c.rat]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0;
+      } else if (window.RAT_MAP) {
+        const key = dip.toUpperCase().replace(/\s+/g,' ').trim();
+        rat = window.RAT_MAP[key] || 0;
+      }
+
       nd.push({
-        n:dip,
-        r: c.resp>=0?clean(r[c.resp]):'N/D',
-        j: c.job>=0?clean(r[c.job]):'N/D',
-        rat: c.rat>=0?parseFloat(String(r[c.rat]).replace(/[€\s.]/g,'').replace(',','.'))||0:0,
-        A1:rating(r[c.a1]),A2:rating(r[c.a2]),A3:rating(r[c.a3]),
-        B1:rating(r[c.b1]),B2:rating(r[c.b2]),B3:rating(r[c.b3]),
-        C1:rating(r[c.c1]),C2:rating(r[c.c2]),C3:rating(r[c.c3])
+        n: dip,
+        r: c.resp >= 0 ? clean(r[c.resp]) : 'N/D',
+        j: job,
+        rat,
+        A1:rating(r[c.a1]), A2:rating(r[c.a2]), A3:rating(r[c.a3]),
+        B1:rating(r[c.b1]), B2:rating(r[c.b2]), B3:rating(r[c.b3]),
+        C1:rating(r[c.c1]), C2:rating(r[c.c2]), C3:rating(r[c.c3])
       });
     }
-    if(!nd.length){ errEl.textContent='Nessun dato trovato. Controlla il formato CSV.'; return null; }
-    DATA=nd;
-    document.getElementById('dataBadge').textContent='Dati Reali ('+nd.length+')';
-    document.getElementById('dataBadge').style.background='rgba(94,201,140,0.15)';
-    document.getElementById('dataBadge').style.color='#5ec98c';
-    document.getElementById('dataBadge').style.borderColor='rgba(94,201,140,0.3)';
+
+    if (!nd.length) { errEl.textContent='Nessun dato trovato. Controlla intestazioni e formato.'; return null; }
+
+    DATA = nd;
+    const badge = document.getElementById('dataBadge');
+    badge.textContent = 'Dati Reali (' + nd.length + ')';
+    badge.style.background = 'rgba(94,201,140,0.15)';
+    badge.style.color = '#5ec98c';
+    badge.style.borderColor = 'rgba(94,201,140,0.3)';
+
+    setRatWarning(ratMissing && !window.RAT_MAP);
     initAll();
     return nd.length;
-  } catch(e){ errEl.textContent='Errore: '+e.message; return null; }
+  } catch(e) { errEl.textContent='Errore: ' + e.message; return null; }
+}
+
+// ── RAT Map: caricamento separato anagrafica nome→RAT ────────
+function loadRatMap(csvTxt) {
+  const lines = csvTxt.split('\n').filter(l=>l.trim());
+  const map = {};
+  lines.forEach(l => {
+    const p = parseCSVLine(l);
+    if (p.length >= 2) {
+      const nome = clean(p[0]).toUpperCase();
+      const val  = parseFloat(String(p[1]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0;
+      if (nome && val) map[nome] = val;
+    }
+  });
+  if (!Object.keys(map).length) return false;
+  window.RAT_MAP = map;
+  // Applica ai dati già caricati
+  DATA.forEach(d => {
+    const key = d.n.toUpperCase().replace(/\s+/g,' ').trim();
+    if (map[key]) d.rat = map[key];
+  });
+  setRatWarning(false);
+  initAll();
+  return Object.keys(map).length;
+}
+
+function setRatWarning(show) {
+  const el = document.getElementById('ratWarning');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+function handleRatFile(e) {
+  if (!e.target.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const n = loadRatMap(ev.target.result);
+    const el = document.getElementById('ratImportMsg');
+    if (el) el.textContent = n ? '✓ RAT caricato per '+n+' dipendenti' : '⚠ Nessun dato riconosciuto';
+  };
+  reader.readAsText(e.target.files[0]);
 }
 
 // ══════════════════════════════════════════════════════════════
