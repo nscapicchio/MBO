@@ -340,6 +340,37 @@ tbody tr:hover td { background: var(--bg2); }
 .comp-metric-lbl { font-size: 0.75rem; color: var(--text3); }
 .comp-metric-val { font-family: 'DM Mono', monospace; font-size: 0.9rem; font-weight: 500; }
 
+/* ── SHEETS CONNECT ──────────────────────── */
+.url-input-row {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+}
+.url-input-row input[type=url] {
+  flex: 1;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border2); border-radius: 3px;
+  padding: 9px 12px; font-size: 0.8rem;
+  font-family: 'DM Mono', monospace;
+}
+.url-input-row input[type=url]:focus { outline: none; border-color: var(--gold); }
+.sheets-status {
+  font-size: 0.75rem; padding: 7px 12px; border-radius: 3px;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+}
+.sheets-status.ok  { background: rgba(94,201,140,0.08); border: 1px solid rgba(94,201,140,0.25); color: var(--green); }
+.sheets-status.err { background: rgba(232,110,110,0.08); border: 1px solid rgba(232,110,110,0.25); color: var(--red); }
+.sheets-status.loading { background: var(--bg2); border: 1px solid var(--border2); color: var(--text3); }
+.refresh-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  padding: 8px 0; border-top: 1px solid var(--border);
+}
+.refresh-lbl { font-size: 0.72rem; color: var(--text3); font-family: 'DM Mono', monospace; white-space: nowrap; }
+.refresh-row select {
+  width: auto; max-width: 160px; padding: 5px 28px 5px 10px;
+  font-size: 0.72rem; background-size: 10px;
+}
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── EXPORT ───────────────────────────────── */
 .btn-export {
   font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.08em;
@@ -377,8 +408,9 @@ tbody tr:hover td { background: var(--bg2); }
     <div class="header-company">Adrilog S.r.l.</div>
   </div>
   <div class="header-right">
+    <div class="badge" id="syncBadge" style="display:none"></div>
     <div class="badge" id="dataBadge">Dati di Esempio</div>
-    <button class="btn-import" onclick="toggleImport()">↑ Importa CSV</button>
+    <button class="btn-import" onclick="toggleImport()">↑ Importa dati</button>
   </div>
 </header>
 
@@ -386,6 +418,7 @@ tbody tr:hover td { background: var(--bg2); }
 <div class="import-panel" id="importPanel">
   <div class="import-tabs">
     <div class="import-tab active" onclick="switchImportTab('file',this)">↑ Carica file CSV</div>
+    <div class="import-tab" onclick="switchImportTab('sheets',this)">🔗 Google Sheets</div>
     <div class="import-tab" onclick="switchImportTab('paste',this)">⌨ Incolla testo</div>
     <div class="import-tab" onclick="switchImportTab('guide',this)">? Come funziona</div>
   </div>
@@ -405,6 +438,34 @@ tbody tr:hover td { background: var(--bg2); }
     </div>
   </div>
 
+  <!-- GOOGLE SHEETS -->
+  <div class="import-section" id="imp-sheets">
+    <div class="sheets-connect-wrap">
+      <div class="how-to" style="margin-bottom:10px">
+        Incolla l'URL del foglio Google Sheets. Il foglio deve essere <strong>condiviso</strong> ("chiunque abbia il link può visualizzare") oppure <strong>pubblicato sul web</strong> (File → Condividi → Pubblica sul web).<br>
+        <span style="color:var(--text3);font-size:0.72rem">Il dashboard converte automaticamente qualsiasi URL Sheets nel formato CSV corretto.</span>
+      </div>
+      <div class="url-input-row">
+        <input type="url" id="sheetsUrl" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off" spellcheck="false">
+        <button class="btn-sm primary" onclick="loadFromSheetsURL()">Connetti</button>
+      </div>
+      <div id="sheetsStatus" class="sheets-status" style="display:none"></div>
+      <div class="refresh-row" id="refreshRow" style="display:none">
+        <span class="refresh-lbl">Aggiornamento automatico:</span>
+        <select id="refreshInterval" onchange="setAutoRefresh()">
+          <option value="0">Disattivato</option>
+          <option value="30">ogni 30 sec</option>
+          <option value="60" selected>ogni 1 min</option>
+          <option value="300">ogni 5 min</option>
+        </select>
+        <button class="btn-sm" onclick="loadFromSheetsURL()" id="btnManualRefresh" style="padding:4px 10px;font-size:0.7rem">↻ Aggiorna ora</button>
+      </div>
+      <div style="margin-top:12px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:0.72rem;color:var(--text3)">
+        <strong style="color:var(--gold)">Nota:</strong> Se il foglio è privato (condiviso solo con account specifici) la connessione diretta non funziona — usa il tab <em>Carica file CSV</em>. Per connessioni sicure a fogli privati consulta la guida nel tab <em>Come funziona</em>.
+      </div>
+    </div>
+  </div>
+
   <!-- PASTE -->
   <div class="import-section" id="imp-paste">
     <div class="how-to" style="margin-bottom:8px">Apri Google Sheets → <strong>File → Scarica → Valori separati da virgola (.csv)</strong> → apri il file con un editor di testo → copia tutto → incolla qui.</div>
@@ -418,14 +479,29 @@ tbody tr:hover td { background: var(--bg2); }
 
   <!-- GUIDE -->
   <div class="import-section" id="imp-guide">
-    <div class="how-to" style="margin-bottom:12px">Il dashboard legge i dati dal foglio <strong>RACCOGLITORE</strong> del file Google Sheets. La connessione diretta non è disponibile da file locale per motivi di sicurezza del browser — il flusso è semplicissimo:</div>
-    <div class="step"><div class="step-n">1</div><div class="step-t">Apri il Google Sheet con le risposte Tally</div></div>
-    <div class="step"><div class="step-n">2</div><div class="step-t">Vai al foglio <strong style="color:var(--gold)">RACCOGLITORE</strong> (il foglio elaborato dallo script, non quello raw di Tally)</div></div>
-    <div class="step"><div class="step-n">3</div><div class="step-t">Clicca <strong style="color:var(--gold)">File → Scarica → Valori separati da virgola (.csv)</strong></div></div>
-    <div class="step"><div class="step-n">4</div><div class="step-t">Torna qui, clicca <strong style="color:var(--gold)">↑ Carica file CSV</strong> e seleziona il file appena scaricato</div></div>
-    <div class="step"><div class="step-n">5</div><div class="step-t">Il dashboard si aggiorna automaticamente con i dati reali — il badge in alto diventa verde</div></div>
-    <div style="margin-top:14px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:0.73rem;color:var(--text3)">
-      <strong style="color:var(--amber)">⚠ Nota sui caratteri Tally:</strong> Il CSV potrebbe contenere valori preceduti da "•" (es. "• ROSSI MARIO"). Il dashboard li rimuove automaticamente.
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;color:var(--gold);margin-bottom:10px;text-transform:uppercase">Opzione A — Connessione diretta (URL)</div>
+        <div class="step"><div class="step-n">1</div><div class="step-t">Apri il foglio Google Sheets</div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-t">Clicca <strong style="color:var(--gold)">File → Condividi → Condividi con altri</strong> → imposta <em>"Chiunque abbia il link"</em> → Visualizzatore</div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-t">Copia l'URL dalla barra del browser</div></div>
+        <div class="step"><div class="step-n">4</div><div class="step-t">Incollalo nel tab <strong style="color:var(--gold)">🔗 Google Sheets</strong> e clicca Connetti</div></div>
+        <div class="step"><div class="step-n">5</div><div class="step-t">Imposta l'aggiornamento automatico — il badge in alto indica l'ultimo sync</div></div>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:0.71rem;color:var(--text3)">
+          ✓ Funziona da <strong>Cloudflare Pages</strong>, Vercel, GitHub Pages, qualsiasi hosting pubblico.<br>
+          ✗ Non funziona da file locale (<code>file://</code>) per limiti CORS del browser.
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;color:var(--text3);margin-bottom:10px;text-transform:uppercase">Opzione B — Carica file CSV (sempre disponibile)</div>
+        <div class="step"><div class="step-n">1</div><div class="step-t">Apri Google Sheets → foglio <strong style="color:var(--gold)">RACCOGLITORE</strong></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-t">Clicca <strong style="color:var(--gold)">File → Scarica → CSV</strong></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-t">Nel tab <strong style="color:var(--gold)">↑ Carica file CSV</strong> trascina o seleziona il file</div></div>
+        <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:0.71rem;color:var(--text3)">
+          ✓ Funziona sempre, anche offline e da file locale.<br>
+          <strong style="color:var(--amber)">⚠</strong> I valori Tally con "•" vengono rimossi automaticamente.
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -887,6 +963,137 @@ function goToMgr(mgr) {
   showTab('dipendente', document.querySelectorAll('.nav-tab')[1]);
   const first=DATA.find(d=>d.r===mgr);
   if(first){ document.getElementById('selEmp').value=first.n; renderEmp(first.n); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  GOOGLE SHEETS LIVE CONNECTION
+// ══════════════════════════════════════════════════════════════
+let _sheetsConnectedUrl = null;   // URL CSV attivo
+let _autoRefreshTimer   = null;   // setInterval handle
+let _lastSync           = null;   // timestamp ultimo sync
+
+/** Converte qualsiasi URL Google Sheets → URL CSV direttamente fetchable */
+function buildSheetsCSVUrl(rawUrl) {
+  rawUrl = rawUrl.trim();
+  if (!rawUrl.includes('docs.google.com/spreadsheets')) return null;
+
+  // Estrae ID foglio
+  const idMatch = rawUrl.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!idMatch) return null;
+  const id = idMatch[1];
+
+  // Estrae gid (numero del tab specifico), default 0
+  const gidMatch = rawUrl.match(/[?&#]gid=(\d+)/);
+  const gid = gidMatch ? gidMatch[1] : '0';
+
+  // Se già un URL "pub" con output=csv usalo direttamente
+  if (rawUrl.includes('/pub') && rawUrl.includes('output=csv')) return rawUrl;
+
+  // Se URL "pub" senza output=csv, aggiungilo
+  if (rawUrl.includes('/pub')) {
+    return rawUrl.includes('?')
+      ? rawUrl + '&output=csv'
+      : rawUrl + '?output=csv';
+  }
+
+  // URL normale → endpoint export CSV (funziona se condiviso come "chiunque può visualizzare")
+  return `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&id=${id}&gid=${gid}`;
+}
+
+async function loadFromSheetsURL(silent = false) {
+  const rawUrl = document.getElementById('sheetsUrl').value.trim();
+  const statusEl = document.getElementById('sheetsStatus');
+  const refreshRow = document.getElementById('refreshRow');
+
+  if (!rawUrl) {
+    showSheetsStatus('err', 'Incolla prima un URL Google Sheets valido.');
+    return;
+  }
+
+  const csvUrl = buildSheetsCSVUrl(rawUrl);
+  if (!csvUrl) {
+    showSheetsStatus('err', 'URL non riconosciuto. Assicurati sia un link a un foglio Google Sheets.');
+    return;
+  }
+
+  showSheetsStatus('loading', '<span class="spin">⟳</span> Connessione in corso…');
+
+  try {
+    const response = await fetch(csvUrl, { cache: 'no-cache' });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        showSheetsStatus('err', '⚠ Accesso negato (403). Il foglio deve essere condiviso come "chiunque abbia il link può visualizzare".');
+      } else {
+        showSheetsStatus('err', `⚠ Errore HTTP ${response.status}. Controlla URL e permessi di condivisione.`);
+      }
+      return;
+    }
+
+    const text = await response.text();
+    if (!text || text.length < 20) {
+      showSheetsStatus('err', '⚠ Il foglio sembra vuoto. Verifica di aver puntato al foglio corretto.');
+      return;
+    }
+
+    // Prova a parsare
+    const errProxy = { textContent: '' };
+    const count = parseCSVText(text, errProxy);
+
+    if (!count) {
+      showSheetsStatus('err', '⚠ Dati non leggibili. ' + errProxy.textContent);
+      return;
+    }
+
+    // Successo
+    _sheetsConnectedUrl = csvUrl;
+    _lastSync = new Date();
+    refreshRow.style.display = 'flex';
+
+    const timeStr = _lastSync.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    showSheetsStatus('ok', `✓ Connesso · ${count} dipendenti · Sync ${timeStr}`);
+    updateSyncBadge(count, timeStr);
+
+    if (!silent) {
+      // Chiudi pannello dopo 1.5s
+      setTimeout(() => toggleImport(), 1500);
+    }
+
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      showSheetsStatus('err', '⚠ CORS bloccato: stai aprendo il file localmente. Carica il dashboard su Cloudflare Pages o altro hosting per usare la connessione diretta.');
+    } else {
+      showSheetsStatus('err', '⚠ Errore: ' + err.message);
+    }
+  }
+}
+
+function showSheetsStatus(type, html) {
+  const el = document.getElementById('sheetsStatus');
+  el.className = 'sheets-status ' + type;
+  el.innerHTML = html;
+  el.style.display = 'flex';
+}
+
+function updateSyncBadge(count, timeStr) {
+  const badge = document.getElementById('dataBadge');
+  const syncBadge = document.getElementById('syncBadge');
+  badge.textContent = 'Live · ' + count + ' dipendenti';
+  badge.style.background = 'rgba(94,201,140,0.15)';
+  badge.style.color = '#5ec98c';
+  badge.style.borderColor = 'rgba(94,201,140,0.3)';
+  syncBadge.textContent = '↻ ' + timeStr;
+  syncBadge.style.display = '';
+  syncBadge.style.color = 'var(--text3)';
+  syncBadge.style.background = 'transparent';
+  syncBadge.style.borderColor = 'var(--border2)';
+}
+
+function setAutoRefresh() {
+  const secs = parseInt(document.getElementById('refreshInterval').value);
+  if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
+  if (secs > 0 && _sheetsConnectedUrl) {
+    _autoRefreshTimer = setInterval(() => loadFromSheetsURL(true), secs * 1000);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
