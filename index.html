@@ -445,6 +445,27 @@ tbody tr:hover td { background: var(--bg2); }
 }
 .modal-year-row input:focus { outline: none; border-color: var(--gold); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+/* ── PARAMETRI PANEL ───────────────────────── */
+.param-row {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 10px 12px;
+}
+.param-label {
+  font-size: 0.76rem; color: var(--text); font-weight: 500; margin-bottom: 6px;
+}
+.param-hint {
+  font-family: 'DM Mono', monospace; font-size: 0.65rem;
+  color: var(--text3); font-weight: 400; margin-left: 6px;
+}
+.param-input {
+  width: 80px; padding: 4px 8px; font-size: 0.82rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 2px; font-family: 'DM Mono', monospace; text-align: right;
+}
+.param-input:focus { outline: none; border-color: var(--gold); }
+.param-unit { font-size: 0.78rem; color: var(--text3); }
+.param-desc { font-size: 0.71rem; color: var(--text3); margin-top: 6px; line-height: 1.4; }
+
 </style>
 </head>
 <body>
@@ -460,6 +481,7 @@ tbody tr:hover td { background: var(--bg2); }
     <div class="badge" id="syncBadge" style="display:none"></div>
     <div class="badge" id="dataBadge">Dati di Esempio</div>
     <button class="btn-import" onclick="openResetModal()" style="font-size:0.72rem;padding:6px 12px;color:var(--text3);" title="Nuovo ciclo / Reset">⟲ Nuovo ciclo</button>
+    <button class="btn-import" onclick="toggleParamPanel()" style="font-size:0.72rem;padding:6px 12px;">⚙ Parametri</button>
     <button class="btn-import" onclick="toggleRatPanel()" style="font-size:0.72rem;padding:6px 12px;">✎ RAT</button>
     <button class="btn-import" onclick="toggleImport()">↑ Importa dati</button>
   </div>
@@ -609,7 +631,79 @@ tbody tr:hover td { background: var(--bg2); }
     </div>
   </div>
   <div style="font-size:0.73rem;color:var(--text3);margin-bottom:10px;">Le modifiche si applicano immediatamente ai calcoli. Per renderle permanenti, aggiorna il file HTML (sezione <code style="color:var(--gold)">RAT_MAP</code>).</div>
-  <div id="ratTable" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;max-height:300px;overflow-y:auto;padding-right:6px;"></div>
+  <div id="ratTable" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;max-height:260px;overflow-y:auto;padding-right:6px;margin-bottom:10px;"></div>
+  <!-- Aggiungi nuova risorsa -->
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px dashed var(--border2);border-radius:3px;background:var(--bg2);">
+    <span style="font-size:0.72rem;color:var(--text3);white-space:nowrap;">+ Aggiungi:</span>
+    <input type="text" id="ratNewName" placeholder="COGNOME NOME" spellcheck="false"
+      style="flex:2;background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:2px;
+             padding:4px 8px;font-size:0.78rem;font-family:'DM Sans',sans-serif;text-transform:uppercase;"
+      onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border2)'"
+      onkeydown="if(event.key==='Enter') addRatRow()">
+    <input type="number" id="ratNewVal" placeholder="RAT €" min="0" step="100"
+      style="width:100px;background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:2px;
+             padding:4px 8px;font-family:'DM Mono',monospace;font-size:0.78rem;text-align:right;"
+      onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border2)'"
+      onkeydown="if(event.key==='Enter') addRatRow()">
+    <button class="btn-sm primary" onclick="addRatRow()" style="white-space:nowrap;">✓ Aggiungi</button>
+    <span id="ratAddErr" style="font-size:0.72rem;color:var(--red);"></span>
+  </div>
+</div>
+
+<!-- PARAMETRI PANEL -->
+<div id="paramPanel" style="display:none;background:var(--bg1);border-bottom:1px solid var(--border);padding:16px 40px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <span style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;color:var(--gold);text-transform:uppercase">⚙ Parametri di Calcolo Premi — MBO 2025</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-sm" onclick="resetParams()" style="color:var(--text3);">↩ Default</button>
+      <button class="btn-sm primary" onclick="saveParamPanel()">✓ Salva e aggiorna</button>
+      <button class="btn-sm" onclick="document.getElementById('paramPanel').style.display='none'">Chiudi</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;">
+    <div class="param-row">
+      <div class="param-label">% Premio sulla RAT <span class="param-hint">default 3%</span></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" id="p_pctPremio" step="0.1" min="0" max="100" class="param-input" placeholder="3">
+        <span class="param-unit">%</span>
+      </div>
+      <div class="param-desc">Percentuale premio sul RAT per achievement al livello target (100%)</div>
+    </div>
+    <div class="param-row">
+      <div class="param-label">Soglia minima accesso al premio <span class="param-hint">default 3.0</span></div>
+      <input type="number" id="p_sogliaMin" step="0.1" min="1" max="5" class="param-input" placeholder="3.0">
+      <div class="param-desc">Punteggio minimo per ricevere il premio. Sotto questa soglia: €0</div>
+    </div>
+    <div class="param-row">
+      <div class="param-label">Soglia livello base — fascia superiore <span class="param-hint">default 3.5</span></div>
+      <input type="number" id="p_sogliaParz2" step="0.1" min="1" max="5" class="param-input" placeholder="3.5">
+      <div class="param-desc">Punteggi ≥ soglia min e ≤ questo valore → moltiplicatore livello base</div>
+    </div>
+    <div class="param-row">
+      <div class="param-label">% Moltiplicatore livello base <span class="param-hint">default 75%</span></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" id="p_multParz" step="1" min="0" max="200" class="param-input" placeholder="75">
+        <span class="param-unit">%</span>
+      </div>
+      <div class="param-desc">Moltiplicatore sul premio pieno per punteggi nella fascia base</div>
+    </div>
+    <div class="param-row">
+      <div class="param-label">Soglia livello top <span class="param-hint">default 4.5</span></div>
+      <input type="number" id="p_sogliaPieno2" step="0.1" min="1" max="5" class="param-input" placeholder="4.5">
+      <div class="param-desc">Punteggi ≥ questo valore → moltiplicatore eccellenza</div>
+    </div>
+    <div class="param-row">
+      <div class="param-label">% Moltiplicatore livello top <span class="param-hint">default 120%</span></div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" id="p_multEcc" step="1" min="0" max="300" class="param-input" placeholder="120">
+        <span class="param-unit">%</span>
+      </div>
+      <div class="param-desc">Moltiplicatore sul premio pieno per punteggi ≥ soglia top</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;font-size:0.71rem;color:var(--text3);">
+    Schema: punteggio &lt; soglia = €0 &nbsp;|&nbsp; ≥ soglia e ≤ 3.5 = Premio × %base &nbsp;|&nbsp; &gt; 3.5 e &lt; soglia top = Premio × 100% &nbsp;|&nbsp; ≥ soglia top = Premio × %top
+  </div>
 </div>
 
 <!-- NAV -->
@@ -694,7 +788,8 @@ tbody tr:hover td { background: var(--bg2); }
 // ══════════════════════════════════════════════════════════════
 //  PARAMETRI
 // ══════════════════════════════════════════════════════════════
-const P = { pctPremio:.03, sogliaMin:3.0, sogliaParz2:3.5, multParz:.75, sogliaPieno2:4.5, multPieno:1.0, multEcc:1.2 };
+let P = { pctPremio:.03, sogliaMin:3.0, sogliaParz2:3.5, multParz:.75, sogliaPieno2:4.5, multPieno:1.0, multEcc:1.2 };
+const P_DEFAULT = { pctPremio:.03, sogliaMin:3.0, sogliaParz2:3.5, multParz:.75, sogliaPieno2:4.5, multPieno:1.0, multEcc:1.2 };
 
 const CRITERI = {
   A1:'Contributo ai risultati aziendali / BU',
@@ -720,43 +815,88 @@ const CRITERI = {
 //             BARANELLO → {BRAMANTE}
 // ══════════════════════════════════════════════════════════════
 const DATA_ESEMPIO = [
-  // ── Riporto diretto a MAZZALI LUCA ───────────────────────────
-  {n:'ACQUAROLA GIORGIO',        r:'MAZZALI LUCA',          j:'Key Account Manager',                    rat:74830,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:3,C2:4,C3:4},
-  {n:'BARANELLO FABIOLA',        r:'MAZZALI LUCA',          j:'Direttore Amm. e Finanza',               rat:79261,  A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:5,C3:4},
-  {n:'FALCUCCI GIUSEPPE',        r:'MAZZALI LUCA',          j:'Responsabile UB Trasporto',              rat:105926, A1:5,A2:4,A3:5,B1:5,B2:5,B3:5,C1:4,C2:5,C3:5},
-  {n:'IACOVELLI FEDERICA',       r:'MAZZALI LUCA',          j:'RSPP',                                   rat:42691,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
-  {n:'TODISCO LUCIA',            r:'MAZZALI LUCA',          j:'Direttore Risorse Umane',                rat:0,      A1:4,A2:4,A3:4,B1:4,B2:5,B3:4,C1:4,C2:4,C3:5},
-  {n:'PINELLI FRANCESCO',        r:'MAZZALI LUCA',          j:'Responsabile SGQ & HACCP',               rat:0,      A1:4,A2:4,A3:3,B1:4,B2:3,B3:4,C1:3,C2:4,C3:3},
-  // ── Riporto a ACQUAROLA GIORGIO ──────────────────────────────
-  {n:'CALABRESE ENRICO',         r:'ACQUAROLA GIORGIO',     j:'Project Leader Movimentazione',          rat:54833,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:2,C2:3,C3:3},
-  {n:'INGROSSO ANGELO GIUSEPPE', r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:40599,  A1:4,A2:4,A3:4,B1:5,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'MEMINAJ GLODIAN',          r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:34315,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
-  {n:'BRATTOLI MICHELE',         r:'ACQUAROLA GIORGIO',     j:'Responsabile Ufficio Traffico',          rat:37128,  A1:4,A2:3,A3:4,B1:3,B2:3,B3:3,C1:3,C2:4,C3:3},
-  {n:'ANGELINI CRISTIANO',       r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:0,      A1:3,A2:3,A3:4,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
-  // ── Riporto a CALABRESE ENRICO ───────────────────────────────
-  {n:'GASBARRO MARCO',           r:'CALABRESE ENRICO',      j:'Coordinatore Operativo',                 rat:0,      A1:4,A2:4,A3:3,B1:4,B2:4,B3:5,C1:4,C2:5,C3:5},
-  // ── Riporto a FALCUCCI GIUSEPPE ──────────────────────────────
-  {n:'PAGLIARO RICCARDO',        r:'FALCUCCI GIUSEPPE',     j:'Resp. UB Logistica di Magazzino',        rat:74607,  A1:4,A2:4,A3:4,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
-  {n:'CHECCHIA DAMIANO',         r:'FALCUCCI GIUSEPPE',     j:'Resp. Pianificazione e Controllo Oper.', rat:47560,  A1:4,A2:4,A3:4,B1:3,B2:4,B3:3,C1:4,C2:4,C3:4},
-  {n:'LOMAGISTRO VITA',          r:'FALCUCCI GIUSEPPE',     j:'Resp. Ufficio Ingegneria di Processo',   rat:49162,  A1:3,A2:4,A3:3,B1:4,B2:4,B3:4,C1:3,C2:3,C3:4},
-  {n:'MORA ANDREA',              r:'FALCUCCI GIUSEPPE',     j:'Responsabile Commerciale',               rat:43313,  A1:4,A2:3,A3:4,B1:3,B2:3,B3:4,C1:4,C2:3,C3:3},
-  {n:'GRECO FABRIZIO',           r:'FALCUCCI GIUSEPPE',     j:'Responsabile Sistemi Informativi',       rat:0,      A1:3,A2:4,A3:3,B1:3,B2:4,B3:3,C1:4,C2:3,C3:4},
-  {n:'GENOVA DAVID',             r:'FALCUCCI GIUSEPPE',     j:'Responsabile Flotta Autisti',            rat:37801,  A1:3,A2:3,A3:4,B1:4,B2:3,B3:3,C1:3,C2:4,C3:3},
-  {n:'MARCOZZI LUIGI',           r:'FALCUCCI GIUSEPPE',     j:'Account Trasporto',                      rat:35380,  A1:4,A2:4,A3:3,B1:3,B2:4,B3:4,C1:3,C2:4,C3:4},
-  {n:'CAMPANELLA MATTEO',        r:'FALCUCCI GIUSEPPE',     j:'Key Account Manager',                    rat:0,      A1:4,A2:4,A3:4,B1:4,B2:3,B3:4,C1:4,C2:4,C3:3},
-  {n:'PASTO EMILIANO',           r:'FALCUCCI GIUSEPPE',     j:'Responsabile UB Trasporto',              rat:0,      A1:3,A2:4,A3:3,B1:4,B2:4,B3:3,C1:3,C2:4,C3:4},
-  // ── Riporto a PAGLIARO RICCARDO ──────────────────────────────
-  {n:'DI STEFANO DANTE',         r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',                 rat:44800,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'SANFILIPPO GIANLUCA',      r:'PAGLIARO RICCARDO',     j:'Resp. UB Logistica di Magazzino',        rat:46076,  A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:4,C3:5},
-  {n:'VALIERI STEFANO',          r:'PAGLIARO RICCARDO',     j:'Logistic Manager',                       rat:79912,  A1:4,A2:4,A3:5,B1:4,B2:5,B3:4,C1:5,C2:4,C3:4},
-  {n:'CORTI FAVIO FRANCISCO',    r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',                 rat:0,      A1:3,A2:3,A3:3,B1:4,B2:3,B3:3,C1:3,C2:3,C3:4},
-  // ── Riporto a TODISCO LUCIA ───────────────────────────────────
-  {n:'FLAMMINIO ILARIA',         r:'TODISCO LUCIA',         j:'Responsabile Amministrazione HR',        rat:47138,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'CARUSO SILVIA',            r:'TODISCO LUCIA',         j:'Responsabile Talent Acquisition',        rat:38262,  A1:3,A2:4,A3:3,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
-  // ── Riporto a CARUSO SILVIA ───────────────────────────────────
-  {n:'CAVALLERETTO ELENA',       r:'CARUSO SILVIA',         j:'HR Specialist',                          rat:0,      A1:3,A2:4,A3:5,B1:5,B2:2,B3:4,C1:4,C2:3,C3:5},
-  // ── Riporto a BARANELLO FABIOLA ──────────────────────────────
-  {n:'BRAMANTE LUIGI',           r:'BARANELLO FABIOLA',     j:'Collaboratore Amm.',                     rat:0,      A1:4,A2:3,A3:4,B1:4,B2:4,B3:3,C1:3,C2:3,C3:4},
+  {n:'ANGELINI CRISTIANO', r:'ACQUAROLA GIORGIO', j:'Coordinatore Operativo', rat:34247.76, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CALABRESE ENRICO', r:'ACQUAROLA GIORGIO', j:'Project Leader Movimentazione', rat:54833.54, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'INGROSSO ANGELO GIUSEPPE', r:'ACQUAROLA GIORGIO', j:'Coordinatore Operativo', rat:40599.98, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MEMINAJ GLODIAN', r:'ACQUAROLA GIORGIO', j:'Coordinatore Operativo', rat:34315.2, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BRATTOLI MICHELE', r:'ACQUAROLA GIORGIO', j:'Responsabile ufficio traffico', rat:37128.38, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MACARLINO GIUSEPPE', r:'ACQUAROLA GIORGIO', j:'Responsabile ufficio traffico', rat:42978.5, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MERLONGHI ALESSIO', r:'ANGELINI CRISTIANO', j:'Responsabile Magazzino TP MSP GV', rat:28211.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PAPOTTO GIUSEPPE', r:'ANGELINI CRISTIANO', j:'Responsabile Magazzino TP MSP Of', rat:28211.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FRISON AGNESE', r:'BARANELLO FABIOLA', j:'Addetto Amministrazione e Contabilità', rat:25489.66, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PETRAGNANO ROBERTA', r:'BARANELLO FABIOLA', j:'Addetto Amministrazione e Contabilità', rat:29564.56, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BRAMANTE LUIGI', r:'BARANELLO FABIOLA', j:'Addetto Amministrazione e Contabilità', rat:30729.92, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'LEMME NICOLA', r:'CALABRESE ENRICO', j:'Ingegnere di Processo', rat:39416.6, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CICCHINI STEFANIA', r:'CALABRESE ENRICO', j:'Project Leader Trasporto', rat:32778.24, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'GASBARRO MARCO', r:'CALABRESE ENRICO', j:'Responsabile processi interni Conad', rat:50350.82, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'TERROSI MASSIMO', r:'CAMPANELLA MATTEO', j:'Coordinatore Operativo', rat:39289.98, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CAVALLERETTO ELENA', r:'CARUSO SILVIA', j:'HR Talent Acquisition', rat:27599.8, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PALOMBO MARIO', r:'CHECCHIA DAMIANO', j:'Addetto Pianificazione e Controllo Operativo', rat:28042.0, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'LUO LIPING', r:'CHECCHIA DAMIANO', j:'Addetto Pianificazione e Controllo Operativo', rat:24206.4, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DE SIMONE MICHELE', r:'CORTI FAVIO FRACISCO', j:'Responsabile Magazzino Deco San Michele', rat:31743.02, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MINI ENRICO', r:'CORTI FAVIO FRACISCO', j:'Responsabile Magazzino Deco Bagnacavallo', rat:33668.28, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CAMPANELLA MATTEO', r:'DEL BORRELLO LUCA', j:'Key Account Manager', rat:52027.26, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BRATTOLI MICHELE', r:'DEL BORRELLO LUCA', j:'Responsabile Ufficio Traffico Area Sud', rat:37128.38, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI LEVA FRANCESCO', r:'DI STEFANO DANTE', j:'Responsabile Magazzino', rat:30536.28, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DOLZANI ANDREA', r:'DI STEFANO DANTE', j:'Responsabile Magazzino Newpal', rat:33292.62, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PETRICCIONE MASSIMILIANO', r:'DI STEFANO DANTE', j:'Responsabile Magazzino CPR', rat:37794.0, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MARCOZZI LUIGI', r:'FALCUCCI GIUSEPPE', j:'Account Trasporto Area centro-sud', rat:35380.84, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PASTO\' EMILIANO', r:'FALCUCCI GIUSEPPE', j:'Fleet Manager', rat:33399.34, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'GRECO FABRIZIO NATALE', r:'FALCUCCI GIUSEPPE', j:'Responsabile Acquisti', rat:53193.86, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MORA ANDREA', r:'FALCUCCI GIUSEPPE', j:'Responsabile commerciale', rat:43313.12, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'GENOVA DAVID', r:'FALCUCCI GIUSEPPE', j:'Responsabile flotta autisti', rat:37801.26, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CHECCHIA DAMIANO', r:'FALCUCCI GIUSEPPE', j:'Responsabile Pianificazione e Controllo Operativo', rat:47560.0, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'GRIGUOLI ANGELO', r:'FALCUCCI GIUSEPPE', j:'Responsabile UB Facility Management', rat:40715.0, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PAGLIARO RICCARDO', r:'FALCUCCI GIUSEPPE', j:'Responsabile UB Logistica di Magazzino', rat:74607.08, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'LOMAGISTRO VITA', r:'FALCUCCI GIUSEPPE', j:'Responsabile Ufficio Ingegneria di processo', rat:49162.18, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MACARLINO GIUSEPPE', r:'FALCUCCI GIUSEPPE', j:'Responsabile Ufficio Traffico Area Centro', rat:42978.5, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DEL CASALE FRANCESCA', r:'FLAMMINIO ILARIA', j:'Generalist Administration HR', rat:24692.59, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI FRANCESCO LUDOVICO', r:'FLAMMINIO ILARIA', j:'Generalist Administration HR', rat:32199.6, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'VALENTINO ALESSANDRO', r:'FLAMMINIO ILARIA', j:'Generalist Administration HR', rat:25287.62, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'ROSINI SARA', r:'FLAMMINIO ILARIA', j:'Specialist Administration HR', rat:29378.28, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BENEDETTO KRYSTEL', r:'FLAMMINIO ILARIA', j:'Specialist Administration HR', rat:28174.02, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'APPUGLIESE ANTONIO', r:'GASBARRO MARCO', j:'Responsabile Magazzino', rat:29171.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'COLONNA GIOVANNI', r:'GASBARRO MARCO', j:'Responsabile Magazzino', rat:25020.92, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'D\'ANGELO DAVIDE', r:'GASBARRO MARCO', j:'Responsabile Magazzino GV San Salvo', rat:28331.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI PIETRO ANTONIO', r:'GASBARRO MARCO', j:'Responsabile Magazzino', rat:28991.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'NOTARO FRANCESCO', r:'GASBARRO MARCO', j:'Responsabile Magazzino Salumi San Salvo', rat:28735.3, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PUSCASU VLAD FRANCISC', r:'GASBARRO MARCO', j:'Responsabile Magazzino Surgelati San Salvo', rat:28271.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI GIOVANNI VITO', r:'GRECO FABRIZIO', j:'Specialista IT', rat:37495.7, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CARDONE PIETRO', r:'INGROSSO ANGELO GIUSEPPE', j:'Responsabile Magazzino', rat:26314.1, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'LEZZI DAMIANO', r:'INGROSSO ANGELO GIUSEPPE', j:'Responsabile Magazzino TP Surbo', rat:28807.08, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PANICO DONATO', r:'INGROSSO ANGELO GIUSEPPE', j:'Responsabile Magazzino', rat:28198.84, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PLATI\' MARCO', r:'INGROSSO ANGELO GIUSEPPE', j:'Responsabile Magazzino Soleto LAS', rat:28855.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FERRIGNO VINCENZO', r:'LOMAGISTRO VITA', j:'Analista Sistemi Informativi', rat:26105.64, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FELICE GIOVANNI', r:'LOMAGISTRO VITA', j:'Ingegnere di Processo', rat:36479.12, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'RICCO ANNUNZIATA', r:'LOMAGISTRO VITA', j:'Ingegnere di Processo', rat:35279.12, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI CLEMENTE REBECCA', r:'MAZZALI LUCA', j:'Assistente di Direzione', rat:24815.75, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FALCUCCI GIUSEPPE', r:'MAZZALI LUCA', j:'Business Operations', rat:105926.9, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BARANELLO FABIOLA', r:'MAZZALI LUCA', j:'Direttore Amministrazione e Finanza', rat:79261.52, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'ACQUAROLA GIORGIO', r:'MAZZALI LUCA', j:'Key Account Manager', rat:74830.62, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FAZZOLARI SARA', r:'MAZZALI LUCA', j:'Reception e segreteria generale', rat:26105.64, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'PINELLI FRANCESCO', r:'MAZZALI LUCA', j:'Responsabile SQG & HACCP', rat:30471.24, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'IACOVELLI FEDERICA', r:'MAZZALI LUCA', j:'RSPP', rat:42691.12, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'SALERNO IDA', r:'MAZZALI LUCA', j:'Responsabile ufficio legale', rat:0.0, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MENNA ALESSIO', r:'MEMIJNAI GLODIAN', j:'Responsabile Magazzino TP Popoli Conad', rat:29555.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BARBIERI THOMAS', r:'PAGLIARO RICCARDO', j:'Responsabile Magazzino Spreafico Livorno', rat:43007.18, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CANALE STEFANO', r:'PAGLIARO RICCARDO', j:'Responsabile Magazzino Gran Guizza', rat:31466.96, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'D\'ANTONIO EMANUELE', r:'PAGLIARO RICCARDO', j:'Fleet Manager mezzi di movimentazione', rat:29420.92, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CAMPANELLA MATTEO', r:'PAGLIARO RICCARDO', j:'Key Account Manager', rat:52027.26, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'VALIERI STEFANO', r:'PAGLIARO RICCARDO', j:'Logistic Manager', rat:79912.32, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CORTI FAVIO FRANCISCO', r:'PAGLIARO RICCARDO', j:'Coordinatore Operativo', rat:42846.86, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'D\'ELIA EGIDIO', r:'PAGLIARO RICCARDO', j:'Responsabile Magazzino Montenegro San Lazzaro', rat:43205.56, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'DI STEFANO DANTE', r:'PAGLIARO RICCARDO', j:'Coordinatore Operativo', rat:44800.56, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'SANFILIPPO GIANLUCA', r:'PAGLIARO RICCARDO', j:'', rat:46076.38, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'MINCONE DINO', r:'PAGLIARO RICCARDO', j:'Responsabile Magazzino Cantina Tollo', rat:26486.4, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CERAJ HENEO', r:'PAGLIARO RICCARDO', j:'Responsabile Magazzino Gran Terre', rat:38737.42, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'IANNE ANTONIO', r:'PAGLIARO RICCARDO/INGROSSO ANGELO', j:'Responsabile Magazzino', rat:32130.68, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CRETELLA SIMONE', r:'PASTO\' EMILIANO', j:'Addetto Back Office Trasporti', rat:27294.64, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'GIURASTANTE EMILIO', r:'PINELLI FRANCESCO', j:'Responsabile Team Igiene degli Ambienti', rat:26171.72, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'SINGH AMARJIT', r:'SANFILIPPO GIANLUCA', j:'Responsabile Magazzino Eurospin Aprilia GV Mov', rat:40833.64, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'BONAURIO PAOLO', r:'SANFILIPPO GIANLUCA', j:'Responsabile Magazzino Eurospin Aprilia OF Mov', rat:42335.56, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'KALLE SIDI BOUBACAR', r:'SANFILIPPO GIANLUCA', j:'Responsabile Magazzino Eurospin Aprilia LAS Mov', rat:42093.64, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'FLAMMINIO ILARIA', r:'TODISCO LUCIA', j:'Responsabile Amministrazione HR', rat:47138.44, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
+  {n:'CARUSO SILVIA', r:'TODISCO LUCIA', j:'Responsabile Talent Acquisition', rat:38262.14, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0},
 ];
 let DATA = DATA_ESEMPIO.map(d => ({...d}));
 
@@ -764,34 +904,85 @@ let DATA = DATA_ESEMPIO.map(d => ({...d}));
 //  ANAGRAFICA RAT  ← modifica qui i valori, o usa il pannello ✎ RAT
 // ══════════════════════════════════════════════════════════════
 window.RAT_MAP = {
-  'ACQUAROLA GIORGIO':          74830,
-  'ANGELINI CRISTIANO':             0,
-  'BARANELLO FABIOLA':          79261,
-  'BRATTOLI MICHELE':           37128,
-  'CALABRESE ENRICO':           54833,
-  'CAMPANELLA MATTEO':              0,
-  'CARUSO SILVIA':              38262,
-  'CHECCHIA DAMIANO':           47560,
-  'CORTI FAVIO FRANCISCO':          0,
-  'DI STEFANO DANTE':           44800,
-  'FALCUCCI GIUSEPPE':         105926,
-  'FLAMMINIO ILARIA':           47138,
-  'GASBARRO MARCO':                 0,
-  'GENOVA DAVID':               37801,
-  'GRECO FABRIZIO':                 0,
-  'IACOVELLI FEDERICA':         42691,
-  'INGROSSO ANGELO GIUSEPPE':   40599,
-  'LOMAGISTRO VITA':            49162,
-  'MARCOZZI LUIGI':             35380,
-  'MAZZALI LUCA':                   0,
-  'MEMINAJ GLODIAN':            34315,
-  'MORA ANDREA':                43313,
-  'PAGLIARO RICCARDO':          74607,
-  'PASTO EMILIANO':                 0,
-  'PINELLI FRANCESCO':              0,
-  'SANFILIPPO GIANLUCA':        46076,
-  'TODISCO LUCIA':                  0,
-  'VALIERI STEFANO':            79912,
+  'ACQUAROLA GIORGIO': 74830.62,
+  'ANGELINI CRISTIANO': 34247.76,
+  'APPUGLIESE ANTONIO': 29171.72,
+  'BARANELLO FABIOLA': 79261.52,
+  'BARBIERI THOMAS': 43007.18,
+  'BENEDETTO KRYSTEL': 28174.02,
+  'BONAURIO PAOLO': 42335.56,
+  'BRAMANTE LUIGI': 30729.92,
+  'BRATTOLI MICHELE': 37128.38,
+  'CALABRESE ENRICO': 54833.54,
+  'CAMPANELLA MATTEO': 52027.26,
+  'CANALE STEFANO': 31466.96,
+  'CARDONE PIETRO': 26314.1,
+  'CARUSO SILVIA': 38262.14,
+  'CAVALLERETTO ELENA': 27599.8,
+  'CERAJ HENEO': 38737.42,
+  'CHECCHIA DAMIANO': 47560.0,
+  'CICCHINI STEFANIA': 32778.24,
+  'COLONNA GIOVANNI': 25020.92,
+  'CORTI FAVIO FRANCISCO': 42846.86,
+  'CRETELLA SIMONE': 27294.64,
+  'DE SIMONE MICHELE': 31743.02,
+  'DEL CASALE FRANCESCA': 24692.59,
+  'DI CLEMENTE REBECCA': 24815.75,
+  'DI FRANCESCO LUDOVICO': 32199.6,
+  'DI GIOVANNI VITO': 37495.7,
+  'DI LEVA FRANCESCO': 30536.28,
+  'DI PIETRO ANTONIO': 28991.72,
+  'DI STEFANO DANTE': 44800.56,
+  'DOLZANI ANDREA': 33292.62,
+  'D\'ANGELO DAVIDE': 28331.72,
+  'D\'ANTONIO EMANUELE': 29420.92,
+  'D\'ELIA EGIDIO': 43205.56,
+  'FALCUCCI GIUSEPPE': 105926.9,
+  'FAZZOLARI SARA': 26105.64,
+  'FELICE GIOVANNI': 36479.12,
+  'FERRIGNO VINCENZO': 26105.64,
+  'FLAMMINIO ILARIA': 47138.44,
+  'FRISON AGNESE': 25489.66,
+  'GASBARRO MARCO': 50350.82,
+  'GENOVA DAVID': 37801.26,
+  'GIURASTANTE EMILIO': 26171.72,
+  'GRECO FABRIZIO NATALE': 53193.86,
+  'GRIGUOLI ANGELO': 40715.0,
+  'IACOVELLI FEDERICA': 42691.12,
+  'IANNE ANTONIO': 32130.68,
+  'INGROSSO ANGELO GIUSEPPE': 40599.98,
+  'KALLE SIDI BOUBACAR': 42093.64,
+  'LEMME NICOLA': 39416.6,
+  'LEZZI DAMIANO': 28807.08,
+  'LOMAGISTRO VITA': 49162.18,
+  'LUO LIPING': 24206.4,
+  'MACARLINO GIUSEPPE': 42978.5,
+  'MARCOZZI LUIGI': 35380.84,
+  'MEMINAJ GLODIAN': 34315.2,
+  'MENNA ALESSIO': 29555.72,
+  'MERLONGHI ALESSIO': 28211.72,
+  'MINCONE DINO': 26486.4,
+  'MINI ENRICO': 33668.28,
+  'MORA ANDREA': 43313.12,
+  'NOTARO FRANCESCO': 28735.3,
+  'PAGLIARO RICCARDO': 74607.08,
+  'PALOMBO MARIO': 28042.0,
+  'PANICO DONATO': 28198.84,
+  'PAPOTTO GIUSEPPE': 28211.72,
+  'PASTO\' EMILIANO': 33399.34,
+  'PETRAGNANO ROBERTA': 29564.56,
+  'PETRICCIONE MASSIMILIANO': 37794.0,
+  'PINELLI FRANCESCO': 30471.24,
+  'PLATI\' MARCO': 28855.72,
+  'PUSCASU VLAD FRANCISC': 28271.72,
+  'RICCO ANNUNZIATA': 35279.12,
+  'ROSINI SARA': 29378.28,
+  'SALERNO IDA': 0.0,
+  'SANFILIPPO GIANLUCA': 46076.38,
+  'SINGH AMARJIT': 40833.64,
+  'TERROSI MASSIMO': 39289.98,
+  'VALENTINO ALESSANDRO': 25287.62,
+  'VALIERI STEFANO': 79912.32,
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -1467,6 +1658,27 @@ function renderRatTable() {
     </div>`).join('');
 }
 
+function addRatRow() {
+  const errEl = document.getElementById('ratAddErr');
+  errEl.textContent = '';
+  const nome = document.getElementById('ratNewName').value.trim().toUpperCase().replace(/\s+/,' ');
+  const val  = parseFloat(document.getElementById('ratNewVal').value) || 0;
+  if (!nome || nome.length < 3) { errEl.textContent = 'Inserisci un nome valido'; return; }
+  if (window.RAT_MAP.hasOwnProperty(nome)) { errEl.textContent = 'Già presente — modifica il valore sopra'; return; }
+  window.RAT_MAP[nome] = val;
+  // Aggiungi anche a DATA se non esiste ancora
+  if (!DATA.find(d => d.n === nome)) {
+    DATA.push({ n: nome, r: '', j: '', rat: val, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0 });
+    DATA_ESEMPIO.push({ n: nome, r: '', j: '', rat: val, A1:0,A2:0,A3:0,B1:0,B2:0,B3:0,C1:0,C2:0,C3:0 });
+  } else {
+    DATA.find(d => d.n === nome).rat = val;
+  }
+  document.getElementById('ratNewName').value = '';
+  document.getElementById('ratNewVal').value  = '';
+  renderRatTable();
+  showToast('+ ' + nome + ' aggiunto all\'anagrafica RAT');
+}
+
 function saveRatPanel() {
   document.querySelectorAll('#ratTable input[data-nome]').forEach(inp => {
     const nome = inp.getAttribute('data-nome');
@@ -1699,6 +1911,50 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._tid);
   t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2800);
+}
+
+
+// ── Pannello Parametri ───────────────────────────────────────
+function toggleParamPanel() {
+  const p = document.getElementById('paramPanel');
+  const open = p.style.display === 'none' || p.style.display === '';
+  p.style.display = open ? 'block' : 'none';
+  document.getElementById('importPanel').style.display = 'none';
+  document.getElementById('ratPanel').style.display = 'none';
+  if (open) renderParamPanel();
+}
+
+function renderParamPanel() {
+  document.getElementById('p_pctPremio').value   = +(P.pctPremio * 100).toFixed(4);
+  document.getElementById('p_sogliaMin').value   = P.sogliaMin;
+  document.getElementById('p_sogliaParz2').value = P.sogliaParz2;
+  document.getElementById('p_multParz').value    = +(P.multParz * 100).toFixed(0);
+  document.getElementById('p_sogliaPieno2').value= P.sogliaPieno2;
+  document.getElementById('p_multEcc').value     = +(P.multEcc * 100).toFixed(0);
+}
+
+function saveParamPanel() {
+  const pct   = parseFloat(document.getElementById('p_pctPremio').value)   || 3;
+  const sMin  = parseFloat(document.getElementById('p_sogliaMin').value)   || 3;
+  const sP2   = parseFloat(document.getElementById('p_sogliaParz2').value) || 3.5;
+  const mParz = parseFloat(document.getElementById('p_multParz').value)    || 75;
+  const sTop  = parseFloat(document.getElementById('p_sogliaPieno2').value)|| 4.5;
+  const mTop  = parseFloat(document.getElementById('p_multEcc').value)     || 120;
+  P.pctPremio    = pct / 100;
+  P.sogliaMin    = sMin;
+  P.sogliaParz2  = sP2;
+  P.multParz     = mParz / 100;
+  P.sogliaPieno2 = sTop;
+  P.multEcc      = mTop / 100;
+  document.getElementById('paramPanel').style.display = 'none';
+  initAll();
+  showToast('⚙ Parametri aggiornati');
+}
+
+function resetParams() {
+  Object.assign(P, P_DEFAULT);
+  renderParamPanel();
+  showToast('↩ Parametri ripristinati ai valori predefiniti');
 }
 
 function initAll() {
