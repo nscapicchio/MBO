@@ -396,6 +396,55 @@ tbody tr:hover td { background: var(--bg2); }
   .header, .nav { padding-left: 16px; padding-right: 16px; }
   .import-panel { padding-left: 16px; padding-right: 16px; }
 }
+
+/* ── MODAL NUOVO CICLO ─────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 2000;
+  background: rgba(10,9,8,0.82); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--bg1); border: 1px solid var(--border2);
+  border-radius: 6px; padding: 32px 36px; width: 480px; max-width: 95vw;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  animation: modalIn 0.2s ease;
+}
+@keyframes modalIn {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.modal-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 1.3rem;
+  font-weight: 600; color: var(--gold); letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.modal-sub {
+  font-size: 0.76rem; color: var(--text3); margin-bottom: 24px;
+}
+.modal-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.modal-option {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 16px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--bg2); cursor: pointer; transition: all 0.18s;
+}
+.modal-option:hover { border-color: var(--gold); background: rgba(200,169,110,0.06); }
+.modal-option-icon { font-size: 1.2rem; line-height: 1; flex-shrink: 0; margin-top: 1px; }
+.modal-option-body { flex: 1; }
+.modal-option-title { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.modal-option-desc  { font-size: 0.73rem; color: var(--text3); line-height: 1.5; }
+.modal-option.danger:hover { border-color: var(--red); background: var(--red-bg); }
+.modal-year-row {
+  display: none; margin-top: 12px;
+  align-items: center; gap: 10px;
+}
+.modal-year-row.visible { display: flex; }
+.modal-year-row input {
+  width: 90px; padding: 6px 10px; font-size: 0.85rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border2);
+  border-radius: 3px; font-family: 'DM Mono', monospace; text-align: center;
+}
+.modal-year-row input:focus { outline: none; border-color: var(--gold); }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
 </head>
 <body>
@@ -410,6 +459,7 @@ tbody tr:hover td { background: var(--bg2); }
   <div class="header-right">
     <div class="badge" id="syncBadge" style="display:none"></div>
     <div class="badge" id="dataBadge">Dati di Esempio</div>
+    <button class="btn-import" onclick="openResetModal()" style="font-size:0.72rem;padding:6px 12px;color:var(--text3);" title="Nuovo ciclo / Reset">⟲ Nuovo ciclo</button>
     <button class="btn-import" onclick="toggleRatPanel()" style="font-size:0.72rem;padding:6px 12px;">✎ RAT</button>
     <button class="btn-import" onclick="toggleImport()">↑ Importa dati</button>
   </div>
@@ -503,6 +553,48 @@ tbody tr:hover td { background: var(--bg2); }
           <strong style="color:var(--amber)">⚠</strong> I valori Tally con "•" vengono rimossi automaticamente.
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUOVO CICLO -->
+<div class="modal-overlay" id="resetModal" onclick="closeResetModalOutside(event)">
+  <div class="modal-box" id="resetModalBox">
+    <div class="modal-title">⟲ Nuovo Ciclo di Valutazione</div>
+    <div class="modal-sub">Scegli un'azione per preparare la dashboard al prossimo ciclo MBO.</div>
+    <div class="modal-options">
+
+      <div class="modal-option" onclick="doResetEsempio()">
+        <div class="modal-option-icon">↩</div>
+        <div class="modal-option-body">
+          <div class="modal-option-title">Ripristina dati di esempio</div>
+          <div class="modal-option-desc">Ricarica i voti di esempio dell'anagrafica completa. Utile per simulazioni e demo.</div>
+        </div>
+      </div>
+
+      <div class="modal-option danger" onclick="doTabulaRasa()">
+        <div class="modal-option-icon">🗑</div>
+        <div class="modal-option-body">
+          <div class="modal-option-title">Tabula rasa — azzera tutto</div>
+          <div class="modal-option-desc">Rimuove tutti i dati di valutazione. La dashboard rimane vuota pronta per un nuovo importo reale da CSV o Google Sheets.</div>
+        </div>
+      </div>
+
+      <div class="modal-option" onclick="toggleYearInput()">
+        <div class="modal-option-icon">🗓</div>
+        <div class="modal-option-body">
+          <div class="modal-option-title">Cambia anno di riferimento</div>
+          <div class="modal-option-desc">Aggiorna l'etichetta dell'anno nella dashboard (es. 2025 → 2026).</div>
+          <div class="modal-year-row" id="yearRow">
+            <input type="number" id="yearInput" min="2020" max="2099" value="2025" placeholder="Anno">
+            <button class="btn-sm primary" onclick="event.stopPropagation();doChangeYear()">✓ Applica</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sm" onclick="closeResetModal()">Chiudi</button>
     </div>
   </div>
 </div>
@@ -617,30 +709,56 @@ const CRITERI = {
 };
 
 // ══════════════════════════════════════════════════════════════
-//  DATI DI ESEMPIO
+//  ANAGRAFICA COMPLETA — dati di esempio (sostituiti al caricamento CSV)
+//  Gerarchia: MAZZALI → {ACQUAROLA, BARANELLO, FALCUCCI, IACOVELLI, TODISCO, PINELLI}
+//             ACQUAROLA → {CALABRESE, INGROSSO A.G., MEMINAJ, BRATTOLI, ANGELINI}
+//             CALABRESE → {GASBARRO}
+//             FALCUCCI  → {PAGLIARO, CHECCHIA, LOMAGISTRO, MORA, GRECO, GENOVA, MARCOZZI, CAMPANELLA, PASTO}
+//             PAGLIARO  → {DI STEFANO, SANFILIPPO, VALIERI, CORTI}
+//             TODISCO   → {FLAMMINIO, CARUSO}
+//             CARUSO    → {CAVALLERETTO}
+//             BARANELLO → {BRAMANTE}
 // ══════════════════════════════════════════════════════════════
-let DATA = [
-  {n:'ACQUAROLA GIORGIO',  r:'MAZZALI LUCA',          j:'Key Account Manager',              rat:74830, A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:3,C2:4,C3:4},
-  {n:'BARANELLO FABIOLA',  r:'MAZZALI LUCA',          j:'Direttore Amm. e Finanza',         rat:79261, A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:5,C3:4},
-  {n:'FALCUCCI GIUSEPPE',  r:'MAZZALI LUCA',          j:'Business Operations',              rat:105926,A1:5,A2:4,A3:5,B1:5,B2:5,B3:5,C1:4,C2:5,C3:5},
-  {n:'IACOVELLI FEDERICA', r:'MAZZALI LUCA',          j:'RSPP',                             rat:42691, A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
-  {n:'PAGLIARO RICCARDO',  r:'FALCUCCI GIUSEPPE',     j:'Resp. UB Logistica Magazzino',     rat:74607, A1:4,A2:4,A3:4,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
-  {n:'CHECCHIA DAMIANO',   r:'FALCUCCI GIUSEPPE',     j:'Resp. Pianificazione',             rat:47560, A1:4,A2:4,A3:4,B1:3,B2:4,B3:3,C1:4,C2:4,C3:4},
-  {n:'LOMAGISTRO VITA',    r:'FALCUCCI GIUSEPPE',     j:'Resp. Ufficio Ingegneria',         rat:49162, A1:3,A2:4,A3:3,B1:4,B2:4,B3:4,C1:3,C2:3,C3:4},
-  {n:'MORA ANDREA',        r:'FALCUCCI GIUSEPPE',     j:'Responsabile Commerciale',        rat:43313, A1:4,A2:3,A3:4,B1:3,B2:3,B3:4,C1:4,C2:3,C3:3},
-  {n:'CALABRESE ENRICO',   r:'ACQUAROLA GIORGIO',     j:'Project Leader Movimentazione',    rat:54833, A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:2,C2:3,C3:3},
-  {n:'INGROSSO A.G.',      r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',           rat:40599, A1:4,A2:4,A3:4,B1:5,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'MEMINAJ GLODIAN',    r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',           rat:34315, A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
-  {n:'BRATTOLI MICHELE',   r:'ACQUAROLA GIORGIO',     j:'Resp. Ufficio Traffico',           rat:37128, A1:4,A2:3,A3:4,B1:3,B2:3,B3:3,C1:3,C2:4,C3:3},
-  {n:'DI STEFANO DANTE',   r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',           rat:44800, A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'SANFILIPPO G.',      r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',           rat:46076, A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:4,C3:5},
-  {n:'VALIERI STEFANO',    r:'PAGLIARO RICCARDO',     j:'Logistic Manager',                 rat:79912, A1:4,A2:4,A3:5,B1:4,B2:5,B3:4,C1:5,C2:4,C3:4},
-  {n:'FLAMMINIO ILARIA',   r:'TODISCO LUCIA',         j:'Resp. Amministrazione HR',         rat:47138, A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
-  {n:'CARUSO SILVIA',      r:'TODISCO LUCIA',         j:'Resp. Talent Acquisition',         rat:38262, A1:3,A2:4,A3:3,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
-  {n:'GRECO FABRIZIO',     r:'FALCUCCI GIUSEPPE',     j:'Resp. Sistemi Informatici',        rat:0,     A1:3,A2:4,A3:3,B1:3,B2:4,B3:3,C1:4,C2:3,C3:4},
-  {n:'GENOVA DAVID',       r:'FALCUCCI GIUSEPPE',     j:'Resp. Flotta Autisti',             rat:37801, A1:3,A2:3,A3:4,B1:4,B2:3,B3:3,C1:3,C2:4,C3:3},
-  {n:'MARCOZZI LUIGI',     r:'FALCUCCI GIUSEPPE',     j:'Account Trasporto',                rat:35380, A1:4,A2:4,A3:3,B1:3,B2:4,B3:4,C1:3,C2:4,C3:4},
+const DATA_ESEMPIO = [
+  // ── Riporto diretto a MAZZALI LUCA ───────────────────────────
+  {n:'ACQUAROLA GIORGIO',        r:'MAZZALI LUCA',          j:'Key Account Manager',                    rat:74830,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:3,C2:4,C3:4},
+  {n:'BARANELLO FABIOLA',        r:'MAZZALI LUCA',          j:'Direttore Amm. e Finanza',               rat:79261,  A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:5,C3:4},
+  {n:'FALCUCCI GIUSEPPE',        r:'MAZZALI LUCA',          j:'Responsabile UB Trasporto',              rat:105926, A1:5,A2:4,A3:5,B1:5,B2:5,B3:5,C1:4,C2:5,C3:5},
+  {n:'IACOVELLI FEDERICA',       r:'MAZZALI LUCA',          j:'RSPP',                                   rat:42691,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
+  {n:'TODISCO LUCIA',            r:'MAZZALI LUCA',          j:'Direttore Risorse Umane',                rat:0,      A1:4,A2:4,A3:4,B1:4,B2:5,B3:4,C1:4,C2:4,C3:5},
+  {n:'PINELLI FRANCESCO',        r:'MAZZALI LUCA',          j:'Responsabile SGQ & HACCP',               rat:0,      A1:4,A2:4,A3:3,B1:4,B2:3,B3:4,C1:3,C2:4,C3:3},
+  // ── Riporto a ACQUAROLA GIORGIO ──────────────────────────────
+  {n:'CALABRESE ENRICO',         r:'ACQUAROLA GIORGIO',     j:'Project Leader Movimentazione',          rat:54833,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:2,C2:3,C3:3},
+  {n:'INGROSSO ANGELO GIUSEPPE', r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:40599,  A1:4,A2:4,A3:4,B1:5,B2:4,B3:4,C1:4,C2:4,C3:4},
+  {n:'MEMINAJ GLODIAN',          r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:34315,  A1:3,A2:3,A3:3,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
+  {n:'BRATTOLI MICHELE',         r:'ACQUAROLA GIORGIO',     j:'Responsabile Ufficio Traffico',          rat:37128,  A1:4,A2:3,A3:4,B1:3,B2:3,B3:3,C1:3,C2:4,C3:3},
+  {n:'ANGELINI CRISTIANO',       r:'ACQUAROLA GIORGIO',     j:'Coordinatore Operativo',                 rat:0,      A1:3,A2:3,A3:4,B1:3,B2:3,B3:3,C1:3,C2:3,C3:3},
+  // ── Riporto a CALABRESE ENRICO ───────────────────────────────
+  {n:'GASBARRO MARCO',           r:'CALABRESE ENRICO',      j:'Coordinatore Operativo',                 rat:0,      A1:4,A2:4,A3:3,B1:4,B2:4,B3:5,C1:4,C2:5,C3:5},
+  // ── Riporto a FALCUCCI GIUSEPPE ──────────────────────────────
+  {n:'PAGLIARO RICCARDO',        r:'FALCUCCI GIUSEPPE',     j:'Resp. UB Logistica di Magazzino',        rat:74607,  A1:4,A2:4,A3:4,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
+  {n:'CHECCHIA DAMIANO',         r:'FALCUCCI GIUSEPPE',     j:'Resp. Pianificazione e Controllo Oper.', rat:47560,  A1:4,A2:4,A3:4,B1:3,B2:4,B3:3,C1:4,C2:4,C3:4},
+  {n:'LOMAGISTRO VITA',          r:'FALCUCCI GIUSEPPE',     j:'Resp. Ufficio Ingegneria di Processo',   rat:49162,  A1:3,A2:4,A3:3,B1:4,B2:4,B3:4,C1:3,C2:3,C3:4},
+  {n:'MORA ANDREA',              r:'FALCUCCI GIUSEPPE',     j:'Responsabile Commerciale',               rat:43313,  A1:4,A2:3,A3:4,B1:3,B2:3,B3:4,C1:4,C2:3,C3:3},
+  {n:'GRECO FABRIZIO',           r:'FALCUCCI GIUSEPPE',     j:'Responsabile Sistemi Informativi',       rat:0,      A1:3,A2:4,A3:3,B1:3,B2:4,B3:3,C1:4,C2:3,C3:4},
+  {n:'GENOVA DAVID',             r:'FALCUCCI GIUSEPPE',     j:'Responsabile Flotta Autisti',            rat:37801,  A1:3,A2:3,A3:4,B1:4,B2:3,B3:3,C1:3,C2:4,C3:3},
+  {n:'MARCOZZI LUIGI',           r:'FALCUCCI GIUSEPPE',     j:'Account Trasporto',                      rat:35380,  A1:4,A2:4,A3:3,B1:3,B2:4,B3:4,C1:3,C2:4,C3:4},
+  {n:'CAMPANELLA MATTEO',        r:'FALCUCCI GIUSEPPE',     j:'Key Account Manager',                    rat:0,      A1:4,A2:4,A3:4,B1:4,B2:3,B3:4,C1:4,C2:4,C3:3},
+  {n:'PASTO EMILIANO',           r:'FALCUCCI GIUSEPPE',     j:'Responsabile UB Trasporto',              rat:0,      A1:3,A2:4,A3:3,B1:4,B2:4,B3:3,C1:3,C2:4,C3:4},
+  // ── Riporto a PAGLIARO RICCARDO ──────────────────────────────
+  {n:'DI STEFANO DANTE',         r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',                 rat:44800,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
+  {n:'SANFILIPPO GIANLUCA',      r:'PAGLIARO RICCARDO',     j:'Resp. UB Logistica di Magazzino',        rat:46076,  A1:4,A2:5,A3:4,B1:4,B2:4,B3:5,C1:4,C2:4,C3:5},
+  {n:'VALIERI STEFANO',          r:'PAGLIARO RICCARDO',     j:'Logistic Manager',                       rat:79912,  A1:4,A2:4,A3:5,B1:4,B2:5,B3:4,C1:5,C2:4,C3:4},
+  {n:'CORTI FAVIO FRANCISCO',    r:'PAGLIARO RICCARDO',     j:'Coordinatore Operativo',                 rat:0,      A1:3,A2:3,A3:3,B1:4,B2:3,B3:3,C1:3,C2:3,C3:4},
+  // ── Riporto a TODISCO LUCIA ───────────────────────────────────
+  {n:'FLAMMINIO ILARIA',         r:'TODISCO LUCIA',         j:'Responsabile Amministrazione HR',        rat:47138,  A1:4,A2:4,A3:4,B1:4,B2:4,B3:4,C1:4,C2:4,C3:4},
+  {n:'CARUSO SILVIA',            r:'TODISCO LUCIA',         j:'Responsabile Talent Acquisition',        rat:38262,  A1:3,A2:4,A3:3,B1:4,B2:3,B3:4,C1:3,C2:4,C3:4},
+  // ── Riporto a CARUSO SILVIA ───────────────────────────────────
+  {n:'CAVALLERETTO ELENA',       r:'CARUSO SILVIA',         j:'HR Specialist',                          rat:0,      A1:3,A2:4,A3:5,B1:5,B2:2,B3:4,C1:4,C2:3,C3:5},
+  // ── Riporto a BARANELLO FABIOLA ──────────────────────────────
+  {n:'BRAMANTE LUIGI',           r:'BARANELLO FABIOLA',     j:'Collaboratore Amm.',                     rat:0,      A1:4,A2:3,A3:4,B1:4,B2:4,B3:3,C1:3,C2:3,C3:4},
 ];
+let DATA = DATA_ESEMPIO.map(d => ({...d}));
 
 // ══════════════════════════════════════════════════════════════
 //  ANAGRAFICA RAT  ← modifica qui i valori, o usa il pannello ✎ RAT
@@ -707,6 +825,12 @@ const ini = n => n.split(' ').filter((_,i)=>i<2).map(w=>w[0]).join('');
 // ══════════════════════════════════════════════════════════════
 function renderPanoramica() {
   const cd = DATA.map(d => ({ ...d, ...calc(d) }));
+  if (cd.length === 0) {
+    document.getElementById('kpiCards').innerHTML =
+      '<p style="color:var(--text3);font-size:0.82rem;grid-column:1/-1;padding:8px 0;">Nessun dato — importa un CSV o connetti Google Sheets per iniziare.</p>';
+    document.getElementById('chartByResp') && (document.getElementById('chartByResp').style.display='none');
+    return;
+  }
   const avg = cd.reduce((s,d)=>s+d.pt,0)/cd.length;
   const totalPremio = cd.reduce((s,d)=>s+d.pe,0);
   const exc = cd.filter(d=>d.pt>=4.5).length;
@@ -998,8 +1122,8 @@ function populateSelects() {
       DATA.filter(d=>d.r===mgr).sort((a,b)=>a.n.localeCompare(b.n)).forEach(d=>{
         const o=document.createElement('option');
         o.value=d.n; o.textContent=d.n;
-        if(idx===1&&d.n===DATA[0].n) o.selected=true;
-        if(idx===2&&d.n===DATA[1].n) o.selected=true;
+        if(idx===1&&DATA.length>0&&d.n===DATA[0].n) o.selected=true;
+        if(idx===2&&DATA.length>1&&d.n===DATA[1].n) o.selected=true;
         og.appendChild(o);
       });
       sel.appendChild(og);
@@ -1504,11 +1628,89 @@ function showTab(name,btn) {
   if(name==='tabella') renderTable();
 }
 
+// ══════════════════════════════════════════════════════════════
+//  NUOVO CICLO — RESET MODAL
+// ══════════════════════════════════════════════════════════════
+function openResetModal() {
+  document.getElementById('resetModal').classList.add('open');
+  document.getElementById('yearRow').classList.remove('visible');
+  // Pre-fill year input from current header label
+  const titleEl = document.querySelector('.header-title');
+  const m = titleEl ? titleEl.textContent.match(/\d{4}/) : null;
+  document.getElementById('yearInput').value = m ? m[0] : new Date().getFullYear();
+}
+function closeResetModal() {
+  document.getElementById('resetModal').classList.remove('open');
+}
+function closeResetModalOutside(e) {
+  if (e.target === document.getElementById('resetModal')) closeResetModal();
+}
+function toggleYearInput() {
+  document.getElementById('yearRow').classList.toggle('visible');
+}
+
+function doResetEsempio() {
+  DATA = DATA_ESEMPIO.map(d => ({...d}));
+  document.getElementById('dataBadge').textContent = 'Dati di Esempio';
+  document.getElementById('dataBadge').style.color = '';
+  document.getElementById('dataBadge').style.borderColor = '';
+  closeResetModal();
+  initAll();
+  showToast('↩ Dati di esempio ripristinati');
+}
+
+function doTabulaRasa() {
+  if (!confirm('Sei sicuro? Tutti i dati di valutazione verranno rimossi dalla dashboard.')) return;
+  DATA = [];
+  document.getElementById('dataBadge').textContent = 'Nessun dato';
+  document.getElementById('dataBadge').style.color = 'var(--text3)';
+  document.getElementById('dataBadge').style.borderColor = 'rgba(94,88,82,0.3)';
+  closeResetModal();
+  initAll();
+  showToast('🗑 Dashboard azzerata — importa nuovi dati via CSV o Google Sheets');
+}
+
+function doChangeYear() {
+  const yr = parseInt(document.getElementById('yearInput').value, 10);
+  if (!yr || yr < 2020 || yr > 2099) { alert('Anno non valido'); return; }
+  // Update all occurrences of the year in visible text nodes
+  const titleEl = document.querySelector('.header-title');
+  if (titleEl) titleEl.textContent = titleEl.textContent.replace(/\d{4}/, yr);
+  document.title = document.title.replace(/\d{4}/, yr);
+  closeResetModal();
+  showToast('🗓 Anno aggiornato a ' + yr);
+}
+
+function showToast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = [
+      'position:fixed','bottom:28px','left:50%','transform:translateX(-50%)',
+      'background:var(--bg1)','border:1px solid var(--border2)','border-radius:4px',
+      'padding:10px 20px','font-size:0.78rem','color:var(--text2)',
+      'z-index:3000','pointer-events:none','transition:opacity 0.4s',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.5)'
+    ].join(';');
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2800);
+}
+
 function initAll() {
   renderPanoramica();
   populateSelects();
-  document.getElementById('selEmp').value=DATA[0].n;
-  renderEmp(DATA[0].n);
+  if (DATA.length > 0) {
+    document.getElementById('selEmp').value = DATA[0].n;
+    renderEmp(DATA[0].n);
+  } else {
+    document.getElementById('empDetail').innerHTML =
+      '<p style="color:var(--text3);font-size:0.82rem;padding:24px 0;">Nessun dato disponibile — importa un file CSV o connetti Google Sheets.</p>';
+  }
   renderComp();
   renderTable();
 }
