@@ -1211,111 +1211,103 @@ const clean = v => String(v||'').replace(/^[\s•·\-–"]+/,'').replace(/["]/g,
 const rating = v => { const m=String(v).match(/[1-5]/); return m?+m[0]:0; };
 
 // ── Core CSV → DATA parser ────────────────────────────────────
-// Supporta sia il formato Tally raw che il CSV semplice del RACCOGLITORE
+// Formato Tally: il nome del dipendente valutato NON è in "Dipendente Valutato"
+// (quella colonna è vuota) ma nella colonna Valutatore_X corrispondente al responsabile.
+// La scala voti è "2 – PARZIALE", "3 – ADEGUATO", "4 – SUPERIORE", "5 – ECCELLENTE".
 function parseCSVText(txt, errEl) {
   try {
-    const lines = txt.split('\n').filter(l=>l.trim());
-    if (lines.length < 2) { errEl.textContent='File troppo corto.'; return null; }
+    const lines = txt.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { errEl.textContent = 'File troppo corto.'; return null; }
 
-    const hdrs = parseCSVLine(lines[0]).map(h=>clean(h).toLowerCase());
+    const hdrs = parseCSVLine(lines[0]).map(h => clean(h).toLowerCase());
 
-    // ── 1. Costruisci mappa nome→ruolo dagli header "Valutatore_X - Ruolo" (formato Tally)
-    const nameRoleMap = {};
-    hdrs.forEach(h => {
-      if (h.startsWith('valutatore_')) {
-        const dashIdx = h.indexOf(' - ');
-        if (dashIdx > 0) {
-          const rawName = h.slice('valutatore_'.length, dashIdx).replace(/_/g,' ').trim().toUpperCase();
-          const rawRole = h.slice(dashIdx + 3).trim();
-          // Capitalizza ogni parola del ruolo
-          const role = rawRole.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
-          nameRoleMap[rawName] = role;
-        }
-      }
+    // 1. Mappa colonne Valutatore_X: idx → {respName, respRole}
+    //    La colonna "Valutatore_MarioRossi - Ruolo" contiene il nome del DIPENDENTE
+    //    valutato da Mario Rossi (non il nome di Mario Rossi).
+    const valCols = [];
+    hdrs.forEach((h, i) => {
+      if (!h.startsWith('valutatore_')) return;
+      const dash = h.indexOf(' - ');
+      const respName = (dash > 0 ? h.slice('valutatore_'.length, dash) : h.slice('valutatore_'.length))
+        .replace(/_/g, ' ').trim().toUpperCase();
+      const respRole = dash > 0
+        ? h.slice(dash + 3).trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'N/D';
+      valCols.push({ idx: i, respName, respRole });
     });
 
-    // ── 2. Individua gli indici delle colonne chiave ──────────
-    const fi = (...terms) => { for(const t of terms){ const i=hdrs.findIndex(h=>h.includes(t)); if(i>=0)return i; } return -1; };
+    // 2. Indici colonne critiche
+    const fi = (...terms) => { for (const t of terms) { const i = hdrs.findIndex(h => h.includes(t)); if (i >= 0) return i; } return -1; };
+    const respIdx = fi('nome responsabile', 'responsabile');
+    const ratIdx  = fi('rat', 'retribuzione', 'ral');
 
-    // Dipendente: cerca "dipendente valutato" esatto, poi "dipendente"
-    const dipIdx = (() => {
-      const exact = hdrs.findIndex(h => h === 'dipendente valutato');
-      if (exact >= 0) return exact;
-      return hdrs.findIndex(h => h.includes('dipendente'));
-    })();
+    // Criteri: A1. … C3. (con o senza punto)
+    const cIdx = {};
+    ['a1','a2','a3','b1','b2','b3','c1','c2','c3'].forEach(k => {
+      cIdx[k] = fi(k + '.') >= 0 ? fi(k + '.') : fi(k);
+    });
 
-    // Responsabile: cerca "nome responsabile" esatto, poi "responsabile"
-    const respIdx = (() => {
-      const exact = hdrs.findIndex(h => h === 'nome responsabile');
-      if (exact >= 0) return exact;
-      return hdrs.findIndex(h => h.includes('responsabile') && !h.includes('valutatore'));
-    })();
-
-    const c = {
-      resp: respIdx,
-      dip:  dipIdx,
-      rat:  fi('rat','retribuzione','ral'),
-      job:  fi('ruolo','mansione','qualifica','job title'),
-      a1: fi('a1.'), a2: fi('a2.'), a3: fi('a3.'),
-      b1: fi('b1.'), b2: fi('b2.'), b3: fi('b3.'),
-      c1: fi('c1.'), c2: fi('c2.'), c3: fi('c3.')
-    };
-
-    // Fallback se i criteri hanno header senza punto (es. "a1" da CSV semplice)
-    if(c.a1<0) c.a1=fi('a1'); if(c.a2<0) c.a2=fi('a2'); if(c.a3<0) c.a3=fi('a3');
-    if(c.b1<0) c.b1=fi('b1'); if(c.b2<0) c.b2=fi('b2'); if(c.b3<0) c.b3=fi('b3');
-    if(c.c1<0) c.c1=fi('c1'); if(c.c2<0) c.c2=fi('c2'); if(c.c3<0) c.c3=fi('c3');
-
-    const ratMissing = c.rat < 0;
-    const jobMissing = c.job < 0;
-
-    // ── 3. Parse righe dati ───────────────────────────────────
+    // 3. Parse righe
     const nd = [];
     for (let i = 1; i < lines.length; i++) {
       const r = parseCSVLine(lines[i]);
-      if (r.length < 5) continue;
-      const dip = c.dip >= 0 ? clean(r[c.dip]) : '';
-      if (!dip) continue;
+      if (r.length < 10) continue;
 
-      // Ruolo: dalla colonna o dagli header Valutatore_X (matching per cognome)
-      let job = jobMissing ? 'N/D' : clean(r[c.job]);
-      if ((job === 'N/D' || !job) && Object.keys(nameRoleMap).length) {
-        const dipUpper = dip.toUpperCase();
-        const dipSurname = dipUpper.split(' ')[0];
-        const match = Object.entries(nameRoleMap).find(([name]) =>
-          name.split(' ')[0] === dipSurname && dipSurname.length > 1
-        );
-        if (match) job = match[1];
+      const respFromRow = respIdx >= 0 ? clean(r[respIdx]) : '';
+
+      // Trova quale colonna Valutatore_X ha un valore → quello è il dipendente valutato
+      // Prima prova: incrocia Nome Responsabile con colonna Valutatore omonima (per cognome)
+      let dipName = '', respName = respFromRow, dipJob = 'N/D';
+
+      const matchedVC = respFromRow
+        ? valCols.find(vc => vc.respName.split(' ')[0] === respFromRow.split(' ')[0] && respFromRow.split(' ')[0].length > 1)
+        : null;
+
+      if (matchedVC && r[matchedVC.idx] && r[matchedVC.idx].trim()) {
+        dipName = clean(r[matchedVC.idx]);
+        dipJob  = matchedVC.respRole; // ruolo del responsabile (non del dipendente)
       }
 
-      // RAT: dalla colonna del CSV oppure automaticamente dalla RAT_MAP hardcoded
-      let rat = 0;
-      if (c.rat >= 0) {
-        rat = parseFloat(String(r[c.rat]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0;
+      // Fallback: prima colonna Valutatore_X non vuota
+      if (!dipName) {
+        const anyVC = valCols.find(vc => r[vc.idx] && r[vc.idx].trim());
+        if (anyVC) {
+          dipName  = clean(r[anyVC.idx]);
+          respName = respFromRow || anyVC.respName;
+          dipJob   = anyVC.respRole;
+        }
       }
+
+      if (!dipName) continue;
+
+      // Ruolo del dipendente: se il dipendente è anche un responsabile nel sistema, prendi il suo ruolo
+      const dipVC = valCols.find(vc => vc.respName.split(' ')[0] === dipName.toUpperCase().split(' ')[0] && dipName.split(' ')[0].length > 1);
+      if (dipVC) dipJob = dipVC.respRole;
+
+      // RAT dalla colonna CSV, poi da RAT_MAP per nome/cognome
+      let rat = ratIdx >= 0 ? (parseFloat(String(r[ratIdx]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0) : 0;
       if (!rat && window.RAT_MAP) {
-        // matching esatto, poi per cognome
-        const dipU = dip.toUpperCase().replace(/\s+/g,' ').trim();
-        rat = window.RAT_MAP[dipU] || 0;
+        const key = dipName.toUpperCase().replace(/\s+/g,' ');
+        rat = window.RAT_MAP[key] || 0;
         if (!rat) {
-          const surn = dipU.split(' ')[0];
-          const found = Object.entries(window.RAT_MAP).find(([k]) => k.split(' ')[0] === surn && surn.length > 2);
-          if (found) rat = found[1];
+          const surn = key.split(' ')[0];
+          const hit = Object.entries(window.RAT_MAP).find(([k]) => k.split(' ')[0] === surn && surn.length > 2);
+          if (hit) rat = hit[1];
         }
       }
 
       nd.push({
-        n: dip,
-        r: c.resp >= 0 ? clean(r[c.resp]) : 'N/D',
-        j: job,
+        n: dipName,
+        r: respName || 'N/D',
+        j: dipJob,
         rat,
-        A1:rating(r[c.a1]), A2:rating(r[c.a2]), A3:rating(r[c.a3]),
-        B1:rating(r[c.b1]), B2:rating(r[c.b2]), B3:rating(r[c.b3]),
-        C1:rating(r[c.c1]), C2:rating(r[c.c2]), C3:rating(r[c.c3])
+        A1: rating(r[cIdx.a1]), A2: rating(r[cIdx.a2]), A3: rating(r[cIdx.a3]),
+        B1: rating(r[cIdx.b1]), B2: rating(r[cIdx.b2]), B3: rating(r[cIdx.b3]),
+        C1: rating(r[cIdx.c1]), C2: rating(r[cIdx.c2]), C3: rating(r[cIdx.c3])
       });
     }
 
-    if (!nd.length) { errEl.textContent='Nessun dato trovato. Controlla intestazioni e formato.'; return null; }
+    if (!nd.length) { errEl.textContent = 'Nessun dipendente trovato. Verifica che le colonne Valutatore_X abbiano dati.'; return null; }
 
     DATA = nd;
     const badge = document.getElementById('dataBadge');
@@ -1323,10 +1315,9 @@ function parseCSVText(txt, errEl) {
     badge.style.background = 'rgba(94,201,140,0.15)';
     badge.style.color = '#5ec98c';
     badge.style.borderColor = 'rgba(94,201,140,0.3)';
-
     initAll();
     return nd.length;
-  } catch(e) { errEl.textContent='Errore: ' + e.message; return null; }
+  } catch(e) { errEl.textContent = 'Errore: ' + e.message; return null; }
 }
 
 // ── Pannello RAT editor ──────────────────────────────────────
