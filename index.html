@@ -410,6 +410,7 @@ tbody tr:hover td { background: var(--bg2); }
   <div class="header-right">
     <div class="badge" id="syncBadge" style="display:none"></div>
     <div class="badge" id="dataBadge">Dati di Esempio</div>
+    <button class="btn-import" onclick="toggleRatPanel()" style="font-size:0.72rem;padding:6px 12px;">✎ RAT</button>
     <button class="btn-import" onclick="toggleImport()">↑ Importa dati</button>
   </div>
 </header>
@@ -506,15 +507,17 @@ tbody tr:hover td { background: var(--bg2); }
   </div>
 </div>
 
-<!-- RAT WARNING BANNER -->
-<div id="ratWarning" style="display:none;align-items:center;gap:14px;padding:10px 40px;background:rgba(232,184,110,0.07);border-bottom:1px solid rgba(232,184,110,0.2);">
-  <span style="font-size:0.8rem;color:var(--amber)">⚠ <strong>RAT non trovata nel file:</strong> i premi non sono calcolabili. Carica il file anagrafica (nome, RAT) per abilitare il calcolo.</span>
-  <label style="cursor:pointer;position:relative;flex-shrink:0">
-    <input type="file" accept=".csv,.txt" onchange="handleRatFile(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
-    <span class="btn-sm primary" style="font-size:0.7rem;padding:4px 12px;pointer-events:none">↑ Carica Anagrafica RAT</span>
-  </label>
-  <span id="ratImportMsg" style="font-size:0.72rem;color:var(--green)"></span>
-  <button onclick="document.getElementById('ratWarning').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem">✕</button>
+<!-- RAT EDITOR PANEL -->
+<div id="ratPanel" style="display:none;background:var(--bg1);border-bottom:1px solid var(--border);padding:16px 40px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <span style="font-family:'DM Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;color:var(--gold);text-transform:uppercase">Anagrafica RAT — modifica e salva</span>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-sm primary" onclick="saveRatPanel()">✓ Salva e aggiorna</button>
+      <button class="btn-sm" onclick="document.getElementById('ratPanel').style.display='none'">Chiudi</button>
+    </div>
+  </div>
+  <div style="font-size:0.73rem;color:var(--text3);margin-bottom:10px;">Le modifiche si applicano immediatamente ai calcoli. Per renderle permanenti, aggiorna il file HTML (sezione <code style="color:var(--gold)">RAT_MAP</code>).</div>
+  <div id="ratTable" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:6px;max-height:300px;overflow-y:auto;padding-right:6px;"></div>
 </div>
 
 <!-- NAV -->
@@ -638,6 +641,40 @@ let DATA = [
   {n:'GENOVA DAVID',       r:'FALCUCCI GIUSEPPE',     j:'Resp. Flotta Autisti',             rat:37801, A1:3,A2:3,A3:4,B1:4,B2:3,B3:3,C1:3,C2:4,C3:3},
   {n:'MARCOZZI LUIGI',     r:'FALCUCCI GIUSEPPE',     j:'Account Trasporto',                rat:35380, A1:4,A2:4,A3:3,B1:3,B2:4,B3:4,C1:3,C2:4,C3:4},
 ];
+
+// ══════════════════════════════════════════════════════════════
+//  ANAGRAFICA RAT  ← modifica qui i valori, o usa il pannello ✎ RAT
+// ══════════════════════════════════════════════════════════════
+window.RAT_MAP = {
+  'ACQUAROLA GIORGIO':          74830,
+  'ANGELINI CRISTIANO':             0,
+  'BARANELLO FABIOLA':          79261,
+  'BRATTOLI MICHELE':           37128,
+  'CALABRESE ENRICO':           54833,
+  'CAMPANELLA MATTEO':              0,
+  'CARUSO SILVIA':              38262,
+  'CHECCHIA DAMIANO':           47560,
+  'CORTI FAVIO FRANCISCO':          0,
+  'DI STEFANO DANTE':           44800,
+  'FALCUCCI GIUSEPPE':         105926,
+  'FLAMMINIO ILARIA':           47138,
+  'GASBARRO MARCO':                 0,
+  'GENOVA DAVID':               37801,
+  'GRECO FABRIZIO':                 0,
+  'IACOVELLI FEDERICA':         42691,
+  'INGROSSO ANGELO GIUSEPPE':   40599,
+  'LOMAGISTRO VITA':            49162,
+  'MARCOZZI LUIGI':             35380,
+  'MAZZALI LUCA':                   0,
+  'MEMINAJ GLODIAN':            34315,
+  'MORA ANDREA':                43313,
+  'PAGLIARO RICCARDO':          74607,
+  'PASTO EMILIANO':                 0,
+  'PINELLI FRANCESCO':              0,
+  'SANFILIPPO GIANLUCA':        46076,
+  'TODISCO LUCIA':                  0,
+  'VALIERI STEFANO':            79912,
+};
 
 // ══════════════════════════════════════════════════════════════
 //  CALCOLI
@@ -1251,13 +1288,20 @@ function parseCSVText(txt, errEl) {
         if (match) job = match[1];
       }
 
-      // RAT: dalla colonna oppure dalla RAT_MAP (se l'utente l'ha caricata)
+      // RAT: dalla colonna del CSV oppure automaticamente dalla RAT_MAP hardcoded
       let rat = 0;
       if (c.rat >= 0) {
         rat = parseFloat(String(r[c.rat]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0;
-      } else if (window.RAT_MAP) {
-        const key = dip.toUpperCase().replace(/\s+/g,' ').trim();
-        rat = window.RAT_MAP[key] || 0;
+      }
+      if (!rat && window.RAT_MAP) {
+        // matching esatto, poi per cognome
+        const dipU = dip.toUpperCase().replace(/\s+/g,' ').trim();
+        rat = window.RAT_MAP[dipU] || 0;
+        if (!rat) {
+          const surn = dipU.split(' ')[0];
+          const found = Object.entries(window.RAT_MAP).find(([k]) => k.split(' ')[0] === surn && surn.length > 2);
+          if (found) rat = found[1];
+        }
       }
 
       nd.push({
@@ -1280,50 +1324,52 @@ function parseCSVText(txt, errEl) {
     badge.style.color = '#5ec98c';
     badge.style.borderColor = 'rgba(94,201,140,0.3)';
 
-    setRatWarning(ratMissing && !window.RAT_MAP);
     initAll();
     return nd.length;
   } catch(e) { errEl.textContent='Errore: ' + e.message; return null; }
 }
 
-// ── RAT Map: caricamento separato anagrafica nome→RAT ────────
-function loadRatMap(csvTxt) {
-  const lines = csvTxt.split('\n').filter(l=>l.trim());
-  const map = {};
-  lines.forEach(l => {
-    const p = parseCSVLine(l);
-    if (p.length >= 2) {
-      const nome = clean(p[0]).toUpperCase();
-      const val  = parseFloat(String(p[1]).replace(/[€\s.'"]/g,'').replace(',','.')) || 0;
-      if (nome && val) map[nome] = val;
+// ── Pannello RAT editor ──────────────────────────────────────
+function toggleRatPanel() {
+  const p = document.getElementById('ratPanel');
+  const open = p.style.display === 'none' || p.style.display === '';
+  p.style.display = open ? 'block' : 'none';
+  // Chiude l'import se aperto
+  document.getElementById('importPanel').style.display = 'none';
+  if (open) renderRatTable();
+}
+
+function renderRatTable() {
+  const tbl = document.getElementById('ratTable');
+  const entries = Object.entries(window.RAT_MAP).sort((a,b) => a[0].localeCompare(b[0]));
+  tbl.innerHTML = entries.map(([nome, rat]) => `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:6px 10px;">
+      <span style="flex:1;font-size:0.75rem;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</span>
+      <input type="number" data-nome="${nome}" value="${rat}" min="0" step="100"
+        style="width:90px;background:var(--bg);color:var(--text);border:1px solid var(--border2);
+               border-radius:2px;padding:3px 7px;font-family:'DM Mono',monospace;font-size:0.8rem;text-align:right;"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border2)'">
+    </div>`).join('');
+}
+
+function saveRatPanel() {
+  document.querySelectorAll('#ratTable input[data-nome]').forEach(inp => {
+    const nome = inp.getAttribute('data-nome');
+    const val = parseFloat(inp.value) || 0;
+    window.RAT_MAP[nome] = val;
+  });
+  // Riapplica ai dati caricati
+  DATA.forEach(d => {
+    const k = d.n.toUpperCase().replace(/\s+/g,' ').trim();
+    if (window.RAT_MAP.hasOwnProperty(k)) d.rat = window.RAT_MAP[k];
+    else {
+      const surn = k.split(' ')[0];
+      const found = Object.entries(window.RAT_MAP).find(([n]) => n.split(' ')[0] === surn && surn.length > 2);
+      if (found) d.rat = found[1];
     }
   });
-  if (!Object.keys(map).length) return false;
-  window.RAT_MAP = map;
-  // Applica ai dati già caricati
-  DATA.forEach(d => {
-    const key = d.n.toUpperCase().replace(/\s+/g,' ').trim();
-    if (map[key]) d.rat = map[key];
-  });
-  setRatWarning(false);
+  document.getElementById('ratPanel').style.display = 'none';
   initAll();
-  return Object.keys(map).length;
-}
-
-function setRatWarning(show) {
-  const el = document.getElementById('ratWarning');
-  if (el) el.style.display = show ? 'flex' : 'none';
-}
-
-function handleRatFile(e) {
-  if (!e.target.files[0]) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const n = loadRatMap(ev.target.result);
-    const el = document.getElementById('ratImportMsg');
-    if (el) el.textContent = n ? '✓ RAT caricato per '+n+' dipendenti' : '⚠ Nessun dato riconosciuto';
-  };
-  reader.readAsText(e.target.files[0]);
 }
 
 // ══════════════════════════════════════════════════════════════
